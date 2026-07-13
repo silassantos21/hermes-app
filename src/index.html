@@ -1,0 +1,1113 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Hermes</title>
+
+  <!-- PWA -->
+  <link rel="manifest" href="/manifest.json" />
+  <meta name="theme-color" content="#065F46" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Hermes" />
+  <link rel="apple-touch-icon" href="/hermes-logo-corpo.svg" />
+
+  <!-- Material Design Icons -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css" />
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: { extend: { scale: { '98': '0.98' }, borderWidth: { '1.5': '1.5px' } } }
+    }
+  </script>
+
+  <script src="https://unpkg.com/react@18.2.0/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.23.2/babel.min.js"></script>
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+
+  <style>
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; overscroll-behavior: none; -webkit-font-smoothing: antialiased; }
+    ::-webkit-scrollbar { display: none; }
+    * { scrollbar-width: none; }
+
+    @keyframes sheetUp    { from { transform: translateY(100%); }                                             to { transform: translateY(0); } }
+    @keyframes fadeIn     { from { opacity: 0; }                                                              to { opacity: 1; } }
+    @keyframes slideUp    { from { opacity: 0; transform: translateY(12px); }                                 to { opacity: 1; transform: translateY(0); } }
+    @keyframes xpFloat    { 0%  { opacity:0; transform:translateX(-50%) translateY(8px)  scale(0.85); }
+                            15% { opacity:1; transform:translateX(-50%) translateY(0px)  scale(1.05); }
+                            75% { opacity:1; transform:translateX(-50%) translateY(-4px) scale(1);    }
+                           100% { opacity:0; transform:translateX(-50%) translateY(-12px) scale(0.95);} }
+    @keyframes spin       { to { transform: rotate(360deg); } }
+    @keyframes slideUpFade{ from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
+    @keyframes logoPulse  { 0%,100% { opacity:0.7; } 50% { opacity:1; } }
+
+    .anim-sheet    { animation: sheetUp    0.32s cubic-bezier(0.32,0.72,0,1) both; }
+    .anim-overlay  { animation: fadeIn     0.2s  ease-out both; }
+    .anim-card     { animation: slideUp    0.25s ease-out both; }
+    .anim-xp       { animation: xpFloat   2.6s  ease-out forwards; }
+    .anim-spin     { animation: spin       0.8s  linear infinite; }
+    .anim-slide-up { animation: slideUpFade 0.22s ease-out both; }
+    .anim-logo     { animation: logoPulse  2s    ease-in-out infinite; }
+    .anim-highlight{ animation: ringPulse 0.9s  ease-out 2; }
+
+    @keyframes ringPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(16,185,129,0); } 50% { box-shadow: 0 0 0 6px rgba(16,185,129,0.35); } }
+
+    /* MDI icon vertical alignment */
+    .mdi { line-height: 1; }
+  </style>
+</head>
+<body style="background:#F0FDF4">
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useEffect, useCallback, useMemo, useRef } = React;
+
+/* ─────────────────────────────────────────────
+   CONSTANTES
+───────────────────────────────────────────── */
+const OPCOES_REPORTE = [
+  { id: 'disponivel',   label: 'Está recebendo',            desc: 'Médico presente e atendendo normalmente',   xp: 10, icon: 'mdi-check-circle-outline',    bg: 'bg-green-50',  border: 'border-green-200',  titleCls: 'text-green-800',  descCls: 'text-green-600',  iconCls: 'text-green-500',  badgeCls: 'bg-green-100 text-green-700'   },
+  { id: 'atrasado',     label: 'Está atrasado',             desc: 'Presente mas com atraso no atendimento',    xp: 15, icon: 'mdi-clock-alert-outline',       bg: 'bg-yellow-50', border: 'border-yellow-200', titleCls: 'text-yellow-800', descCls: 'text-yellow-600', iconCls: 'text-yellow-500', badgeCls: 'bg-yellow-100 text-yellow-700' },
+  { id: 'indisponivel', label: 'Não está atendendo',        desc: 'Ausente, cancelou ou não vai atender hoje', xp: 20, icon: 'mdi-close-circle-outline',      bg: 'bg-red-50',    border: 'border-red-200',    titleCls: 'text-red-800',    descCls: 'text-red-600',    iconCls: 'text-red-500',    badgeCls: 'bg-red-100 text-red-700'       },
+  { id: 'nao_trabalha', label: 'Não trabalha mais aqui',    desc: 'Médico mudou de clínica ou foi desligado',  xp: 25, icon: 'mdi-account-remove-outline',   bg: 'bg-orange-50', border: 'border-orange-200', titleCls: 'text-orange-800', descCls: 'text-orange-600', iconCls: 'text-orange-500', badgeCls: 'bg-orange-100 text-orange-700' },
+  { id: 'endereco',     label: 'Endereço incorreto / novo', desc: 'Consultório mudou ou encontrei novo local',  xp: 30, icon: 'mdi-map-marker-plus-outline',  bg: 'bg-blue-50',   border: 'border-blue-200',   titleCls: 'text-blue-800',   descCls: 'text-blue-600',   iconCls: 'text-blue-500',   badgeCls: 'bg-blue-100 text-blue-700'     },
+];
+
+const STATUS_CFG = {
+  disponivel:   { label: 'Recebendo',    icon: 'mdi-check-circle',       bg: 'bg-green-50',  text: 'text-green-700',  border: 'border-green-200',  bar: 'bg-green-500'  },
+  atrasado:     { label: 'Atrasado',     icon: 'mdi-clock-alert-outline', bg: 'bg-yellow-50', text: 'text-yellow-700', border: 'border-yellow-200', bar: 'bg-yellow-500' },
+  indisponivel: { label: 'Indisponível', icon: 'mdi-close-circle',        bg: 'bg-red-50',    text: 'text-red-700',    border: 'border-red-200',    bar: 'bg-red-500'    },
+};
+
+const FEED_ICON = {
+  disponivel:   'mdi-check-circle text-green-500',
+  atrasado:     'mdi-clock-alert-outline text-yellow-500',
+  indisponivel: 'mdi-close-circle text-red-500',
+  nao_trabalha: 'mdi-account-remove-outline text-orange-500',
+  endereco:     'mdi-map-marker text-blue-500',
+};
+
+const ABAS = [
+  { id: 'medicos',  label: 'Médicos',  icon: 'mdi-stethoscope'     },
+  { id: 'feed',     label: 'Feed',     icon: 'mdi-broadcast'        },
+  { id: 'ranking',  label: 'Ranking',  icon: 'mdi-trophy-outline'   },
+  { id: 'perfil',   label: 'Perfil',   icon: 'mdi-account-outline'  },
+];
+
+const FILTROS = [
+  { id: 'todos',       label: 'Todos'       },
+  { id: 'disponiveis', label: 'Disponíveis' },
+  { id: 'alertas',     label: 'Com Alertas' },
+];
+
+const DIAS_SEMANA = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
+
+const HORARIOS_PRESET = [
+  { id: 'manha',   label: 'Manhã',    sub: '08h–12h',  value: '08h–12h'            },
+  { id: 'tarde',   label: 'Tarde',    sub: '13h–18h',  value: '13h–18h'            },
+  { id: 'diatodo', label: 'Dia todo', sub: '08h–18h',  value: '08h–12h / 14h–18h' },
+  { id: 'custom',  label: 'Outro',    sub: 'digitar',  value: null                 },
+];
+
+/* ─────────────────────────────────────────────
+   COMPONENTES
+───────────────────────────────────────────── */
+
+function StatusBadge({ status }) {
+  const s = STATUS_CFG[status] || STATUS_CFG.indisponivel;
+  return (
+    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold border ${s.bg} ${s.text} ${s.border} shrink-0`}>
+      <i className={`mdi ${s.icon} text-sm`} aria-hidden="true" />
+      {s.label}
+    </span>
+  );
+}
+
+function MedicoCard({ medico, onReportar, destacado }) {
+  const s = STATUS_CFG[medico.status] || STATUS_CFG.indisponivel;
+  const iniciais = medico.nome.split(' ').filter(p => p.length > 2).slice(0, 2).map(p => p[0]).join('');
+
+  return (
+    <div id={`medico-${medico.id}`} className={`bg-white rounded-2xl border ${s.border} shadow-sm overflow-hidden anim-card${destacado ? ' anim-highlight' : ''}`}>
+      <div className={`h-0.5 w-full ${s.bar}`} />
+      <div className="p-4">
+        <div className="flex items-start gap-3 mb-3">
+          <div className={`w-11 h-11 rounded-xl ${s.bg} flex items-center justify-center shrink-0 border ${s.border}`}>
+            <span className={`font-black text-sm ${s.text}`}>{iniciais}</span>
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="font-bold text-gray-900 text-sm leading-tight truncate">{medico.nome}</p>
+                <p className="text-emerald-600 font-semibold text-xs mt-0.5">{medico.especialidade}</p>
+                <p className="text-gray-400 text-xs">{medico.crm}</p>
+              </div>
+              <StatusBadge status={medico.status} />
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-gray-50 rounded-xl p-3 mb-3 border border-gray-100">
+          {medico.locais.map((local, idx) => (
+            <div key={local.id}>
+              {idx > 0 && <div className="border-t border-gray-200 my-2" />}
+              <div className="flex items-start gap-2">
+                <i className="mdi mdi-map-marker text-emerald-500 text-base shrink-0 mt-px" aria-hidden="true" />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <p className="text-xs text-gray-600 leading-snug">{local.endereco}</p>
+                    {idx === 0 && medico.locais.length > 1 && (
+                      <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-1.5 py-0.5 shrink-0">
+                        <i className="mdi mdi-star text-[9px]" aria-hidden="true" /> Mais recente
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs font-semibold text-emerald-700 mt-0.5">{local.dias} · {local.horario}</p>
+                  <div className="flex items-center gap-2 mt-1 flex-wrap">
+                    {local.diasVerif > 60 ? (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-orange-600 bg-orange-50 border border-orange-200 rounded-full px-2 py-0.5">
+                        <i className="mdi mdi-alert-circle-outline text-xs" aria-hidden="true" /> Verificação pendente
+                      </span>
+                    ) : local.verificado ? (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-green-600 bg-green-50 border border-green-200 rounded-full px-2 py-0.5">
+                        <i className="mdi mdi-check-decagram text-xs" aria-hidden="true" /> Verificado
+                      </span>
+                    ) : null}
+                    {local.adicionadoEm && (
+                      <span className="text-[10px] text-gray-400">adicionado {local.adicionadoEm}</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="flex items-center justify-between">
+          <p className="text-xs text-gray-400 leading-tight">
+            <span className="font-medium text-gray-500">{medico.reportadoPor}</span>
+            {' · '}{medico.ultimoReporte}
+            {' · '}{medico.totalReportes} reportes
+          </p>
+          <button onClick={() => onReportar(medico)}
+            className="inline-flex items-center gap-1.5 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white font-bold text-xs px-3.5 py-2 rounded-xl transition-all duration-150 shadow-sm shrink-0">
+            <i className="mdi mdi-plus-circle-outline text-sm" aria-hidden="true" />
+            Reportar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Bottom sheet de reporte com 2 passos ── */
+function PainelReporte({ medico, onFechar, onConfirmar, onAdicionarLocal }) {
+  const [passo, setPasso]         = useState('opcoes');
+  const [novoEnd, setNovoEnd]     = useState('');
+  const [diasSel, setDiasSel]     = useState([]);
+  const [horPreset, setHorPreset] = useState('');
+  const [horCustom, setHorCustom] = useState('');
+  const [swipeX, setSwipeX]       = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const touchRef = useRef({ startX: 0, startY: 0, lockH: false, lockV: false });
+
+  const resetEndereco = () => { setNovoEnd(''); setDiasSel([]); setHorPreset(''); setHorCustom(''); };
+
+  useEffect(() => {
+    if (!medico) { setPasso('opcoes'); resetEndereco(); }
+  }, [medico]);
+
+  if (!medico) return null;
+
+  const toggleDia = (dia) =>
+    setDiasSel(prev => prev.includes(dia) ? prev.filter(d => d !== dia) : [...prev, dia]);
+
+  const selQuick = (dias) => setDiasSel(dias);
+
+  const diasFormatados = DIAS_SEMANA.filter(d => diasSel.includes(d)).join(', ');
+  const horPresetObj   = HORARIOS_PRESET.find(h => h.id === horPreset);
+  const horarioFinal   = horPreset === 'custom' ? horCustom : (horPresetObj?.value || '');
+
+  const handleOpcao = (op) => {
+    if (op.id === 'endereco') { setPasso('endereco'); return; }
+    onConfirmar(medico, op);
+  };
+
+  const handleSubmit = () => {
+    if (!novoEnd.trim() || diasSel.length === 0) return;
+    onAdicionarLocal(medico, {
+      endereco: novoEnd.trim(),
+      dias: diasFormatados,
+      horario: horarioFinal || 'A confirmar',
+    });
+  };
+
+  const onTouchStart = (e) => {
+    const t = e.touches[0];
+    touchRef.current = { startX: t.clientX, startY: t.clientY, lockH: false, lockV: false };
+    setIsDragging(true);
+  };
+
+  const onTouchMove = (e) => {
+    const t = e.touches[0];
+    const dx = t.clientX - touchRef.current.startX;
+    const dy = t.clientY - touchRef.current.startY;
+    const ref = touchRef.current;
+    if (!ref.lockH && !ref.lockV) {
+      if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 8) ref.lockH = true;
+      else if (Math.abs(dy) > 8) ref.lockV = true;
+    }
+    if (ref.lockH) setSwipeX(dx);
+  };
+
+  const onTouchEnd = () => {
+    setIsDragging(false);
+    if (Math.abs(swipeX) > 100) {
+      setSwipeX(swipeX > 0 ? 600 : -600);
+      setTimeout(onFechar, 260);
+    } else {
+      setSwipeX(0);
+    }
+  };
+
+  const sheetStyle = {
+    transform: `translateX(${swipeX}px)`,
+    opacity: swipeX !== 0 ? Math.max(0.35, 1 - Math.abs(swipeX) / 250) : 1,
+    transition: isDragging ? 'none' : 'transform 0.28s cubic-bezier(0.32,0.72,0,1), opacity 0.22s ease',
+  };
+
+  return (
+    <>
+      <div className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm anim-overlay" onClick={onFechar} />
+      <div className="fixed inset-x-0 bottom-0 z-50 max-w-lg mx-auto anim-sheet"
+        style={sheetStyle}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+      >
+        <div className="bg-white rounded-t-3xl shadow-2xl overflow-hidden">
+          <div className="flex justify-center pt-3">
+            <div className="w-8 h-1 rounded-full bg-gray-200" />
+          </div>
+          <div className="px-5 pt-4 pb-10">
+            {passo === 'opcoes' ? (
+              <>
+                <div className="mb-5">
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Reportar status</p>
+                  <p className="text-xl font-black text-gray-900 leading-tight">{medico.nome}</p>
+                  <p className="text-sm font-semibold text-emerald-600">{medico.especialidade} · {medico.crm}</p>
+                </div>
+                <div className="space-y-2">
+                  {OPCOES_REPORTE.map(op => (
+                    <button key={op.id} onClick={() => handleOpcao(op)}
+                      className={`w-full flex items-center gap-3 p-3.5 rounded-2xl border ${op.bg} ${op.border} active:scale-[0.98] transition-transform duration-100 text-left`}>
+                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${op.bg} border ${op.border}`}>
+                        <i className={`mdi ${op.icon} text-xl ${op.iconCls}`} aria-hidden="true" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className={`font-bold text-sm ${op.titleCls}`}>{op.label}</p>
+                        <p className={`text-xs mt-0.5 ${op.descCls}`}>{op.desc}</p>
+                      </div>
+                      <span className={`text-xs font-black px-2.5 py-1 rounded-full shrink-0 ${op.badgeCls}`}>+{op.xp} XP</span>
+                    </button>
+                  ))}
+                </div>
+                <button onClick={onFechar}
+                  className="w-full mt-4 py-3 rounded-2xl bg-gray-100 hover:bg-gray-200 text-gray-500 font-bold text-sm transition-colors">
+                  Cancelar
+                </button>
+              </>
+            ) : (
+              <>
+                {/* Cabeçalho do passo 2 */}
+                <div className="flex items-center gap-3 mb-5">
+                  <button onClick={() => { setPasso('opcoes'); resetEndereco(); }}
+                    className="w-8 h-8 rounded-xl bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-600 transition-colors shrink-0">
+                    <i className="mdi mdi-arrow-left text-lg" aria-hidden="true" />
+                  </button>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-none">Novo local</p>
+                    <p className="font-black text-gray-900 text-base leading-tight mt-0.5 truncate">{medico.nome}</p>
+                  </div>
+                  <span className="text-xs font-black px-2.5 py-1 rounded-full bg-blue-100 text-blue-700 shrink-0">+30 XP</span>
+                </div>
+
+                <div className="space-y-4">
+
+                  {/* Endereço */}
+                  <div>
+                    <label className="flex items-center gap-1.5 text-xs font-bold text-gray-500 mb-1.5">
+                      <i className="mdi mdi-map-marker text-gray-400 text-sm" aria-hidden="true" /> Endereço completo *
+                    </label>
+                    <input type="text" placeholder="Rua, número · Bairro, Cidade, UF"
+                      value={novoEnd} onChange={e => setNovoEnd(e.target.value)}
+                      autoFocus
+                      className="w-full border-2 border-gray-200 focus:border-blue-400 rounded-xl px-4 py-2.5 text-sm outline-none transition-colors"
+                    />
+                  </div>
+
+                  {/* Dias — chips toggleáveis */}
+                  <div>
+                    <label className="flex items-center gap-1.5 text-xs font-bold text-gray-500 mb-2">
+                      <i className="mdi mdi-calendar-week-outline text-gray-400 text-sm" aria-hidden="true" /> Dias de atendimento *
+                    </label>
+                    <div className="grid grid-cols-7 gap-1.5">
+                      {DIAS_SEMANA.map(dia => {
+                        const sel = diasSel.includes(dia);
+                        return (
+                          <button key={dia} type="button" onClick={() => toggleDia(dia)}
+                            className={`py-2.5 rounded-xl text-xs font-bold transition-all duration-150 ${
+                              sel
+                                ? 'bg-emerald-500 text-white shadow-sm'
+                                : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                            }`}>
+                            {dia}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div className="flex items-center gap-2 mt-2">
+                      <button type="button"
+                        onClick={() => selQuick(['Seg','Ter','Qua','Qui','Sex'])}
+                        className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-2.5 py-1 active:scale-95 transition-transform">
+                        Dias úteis
+                      </button>
+                      <button type="button"
+                        onClick={() => selQuick(['Seg','Ter','Qua','Qui','Sex','Sáb'])}
+                        className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-2.5 py-1 active:scale-95 transition-transform">
+                        + Sábado
+                      </button>
+                      {diasSel.length > 0 && (
+                        <button type="button" onClick={() => setDiasSel([])}
+                          className="text-[11px] font-bold text-gray-400 ml-auto active:scale-95 transition-transform">
+                          Limpar
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Horário — presets + campo custom */}
+                  <div>
+                    <label className="flex items-center gap-1.5 text-xs font-bold text-gray-500 mb-2">
+                      <i className="mdi mdi-clock-outline text-gray-400 text-sm" aria-hidden="true" /> Horário
+                    </label>
+                    <div className="grid grid-cols-4 gap-2">
+                      {HORARIOS_PRESET.map(h => {
+                        const ativo = horPreset === h.id;
+                        return (
+                          <button key={h.id} type="button"
+                            onClick={() => { setHorPreset(h.id); if (h.id !== 'custom') setHorCustom(''); }}
+                            className={`flex flex-col items-center justify-center py-2.5 px-1 rounded-xl border transition-all duration-150 ${
+                              ativo
+                                ? 'bg-emerald-500 text-white border-emerald-500 shadow-sm'
+                                : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-emerald-300'
+                            }`}>
+                            <span className="text-[11px] font-bold leading-tight">{h.label}</span>
+                            <span className={`text-[10px] mt-0.5 ${ativo ? 'text-emerald-100' : 'text-gray-400'}`}>{h.sub}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {horPreset === 'custom' && (
+                      <input type="text" placeholder="ex: 09h–13h / 15h–19h"
+                        value={horCustom} onChange={e => setHorCustom(e.target.value)}
+                        autoFocus
+                        className="w-full mt-2 border-2 border-gray-200 focus:border-blue-400 rounded-xl px-4 py-2.5 text-sm outline-none transition-colors"
+                      />
+                    )}
+                  </div>
+
+                </div>
+
+                <p className="text-[11px] text-gray-400 mt-4 leading-relaxed">
+                  O local aparecerá com badge "Verificação pendente" até ser confirmado pela comunidade.
+                </p>
+                <button onClick={handleSubmit} disabled={!novoEnd.trim() || diasSel.length === 0}
+                  className="w-full mt-3 py-3 rounded-2xl bg-blue-500 disabled:bg-gray-100 disabled:text-gray-400 text-white font-bold text-sm transition-colors active:scale-[0.98]">
+                  Confirmar novo local (+30 XP)
+                </button>
+                <button onClick={onFechar}
+                  className="w-full mt-2 py-2.5 rounded-2xl bg-gray-100 text-gray-500 font-bold text-sm transition-colors">
+                  Cancelar
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function XpToast({ notif, onDone }) {
+  useEffect(() => {
+    if (!notif) return;
+    const t = setTimeout(onDone, 2600);
+    return () => clearTimeout(t);
+  }, [notif]);
+  if (!notif) return null;
+  return (
+    <div key={notif.key} className="fixed top-24 left-1/2 z-50 pointer-events-none anim-xp">
+      <div className="bg-amber-400 text-amber-900 font-black px-5 py-3 rounded-2xl shadow-xl flex items-center gap-2 whitespace-nowrap">
+        <i className="mdi mdi-star text-xl text-amber-700" aria-hidden="true" />
+        <span className="text-lg">+{notif.xp} XP</span>
+        <span className="font-semibold text-sm text-amber-800">· {notif.label}</span>
+      </div>
+    </div>
+  );
+}
+
+/* Toast de desfazer com countdown, swipe e botão fechar */
+function UndoToast({ undoInfo, onDesfazer, onFechar }) {
+  const [seg, setSeg]           = useState(60);
+  const [dragX, setDragX]       = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const startXRef               = useRef(null);
+
+  useEffect(() => {
+    if (!undoInfo) { setDragX(0); return; }
+    setSeg(60);
+    const iv = setInterval(() => setSeg(s => {
+      if (s <= 1) { clearInterval(iv); return 0; }
+      return s - 1;
+    }), 1000);
+    return () => clearInterval(iv);
+  }, [undoInfo && undoInfo.reporteId]);
+
+  if (!undoInfo) return null;
+
+  const onTouchStart = (e) => {
+    startXRef.current = e.touches[0].clientX;
+    setDragging(true);
+  };
+
+  const onTouchMove = (e) => {
+    if (startXRef.current === null) return;
+    setDragX(e.touches[0].clientX - startXRef.current);
+  };
+
+  const onTouchEnd = () => {
+    setDragging(false);
+    startXRef.current = null;
+    if (Math.abs(dragX) > 90) {
+      setDragX(dragX > 0 ? 500 : -500);
+      setTimeout(onFechar, 220);
+    } else {
+      setDragX(0);
+    }
+  };
+
+  const opacity = Math.max(0, 1 - Math.abs(dragX) / 180);
+
+  return (
+    <div
+      className="fixed bottom-24 inset-x-4 z-50 max-w-lg mx-auto pointer-events-auto anim-slide-up"
+      style={{
+        transform: `translateX(${dragX}px)`,
+        opacity,
+        transition: dragging ? 'none' : 'transform 0.25s cubic-bezier(0.32,0.72,0,1), opacity 0.25s ease',
+      }}
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
+    >
+      <div className="bg-gray-900 text-white rounded-2xl px-4 py-3 shadow-2xl flex items-center gap-3">
+        <i className="mdi mdi-check-circle text-emerald-400 text-xl shrink-0" aria-hidden="true" />
+        <div className="flex-1 min-w-0">
+          <p className="text-[11px] font-semibold text-gray-400">Reporte enviado</p>
+          <p className="text-sm font-bold truncate">{undoInfo.label}</p>
+        </div>
+        <span className="text-xs text-gray-500 font-mono tabular-nums shrink-0">{seg}s</span>
+        <button onClick={onDesfazer}
+          className="bg-white text-gray-900 font-bold text-xs px-3 py-1.5 rounded-xl shrink-0 active:scale-95 transition-transform">
+          Desfazer
+        </button>
+        <button onClick={onFechar} className="text-gray-600 hover:text-white transition-colors shrink-0" aria-label="Fechar">
+          <i className="mdi mdi-close text-lg" aria-hidden="true" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* Feed compacto para a aba Médicos */
+function FeedCompacto({ feed, onVerFeed, onIrParaMedico }) {
+  if (feed.length === 0) return null;
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="flex items-center gap-2 px-3 py-2.5">
+        <span className="relative flex h-2 w-2 shrink-0">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+          <span className="relative inline-flex h-2 w-2 rounded-full bg-green-500" />
+        </span>
+        <span className="text-xs font-bold text-gray-600">Comunidade ao vivo</span>
+        <button onClick={onVerFeed} className="ml-auto inline-flex items-center gap-0.5 text-xs font-bold text-emerald-600">
+          Ver tudo <i className="mdi mdi-chevron-right text-sm" aria-hidden="true" />
+        </button>
+      </div>
+      <div className="border-t border-gray-50">
+        {feed.slice(0, 3).map((item, i) => (
+          <div key={item.id} className={`flex items-center gap-2.5 px-3 py-2 ${i < 2 && i < feed.length - 1 ? 'border-b border-gray-50' : ''}`}>
+            <i className={`mdi ${FEED_ICON[item.status] || 'mdi-clipboard-text text-gray-400'} text-base shrink-0`} aria-hidden="true" />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs text-gray-700 truncate">
+                <span className="font-semibold">{item.usuario}</span>{' · '}
+                <button
+                  onClick={() => onIrParaMedico?.(item.medico)}
+                  className="text-emerald-700 font-semibold underline decoration-emerald-200 underline-offset-2 active:opacity-60"
+                >
+                  {item.medico}
+                </button>
+              </p>
+              <p className="text-[10px] text-gray-400 mt-0.5 truncate">{item.acao}</p>
+            </div>
+            <span className="text-[10px] text-gray-400 shrink-0 whitespace-nowrap">{item.tempo}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* Feed completo para a aba Feed */
+function FeedComunidade({ feed, onIrParaMedico }) {
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="flex items-center gap-2 px-4 py-3.5 border-b border-gray-100">
+        <i className="mdi mdi-broadcast text-emerald-500 text-lg" aria-hidden="true" />
+        <span className="font-bold text-gray-700 text-sm">Comunidade</span>
+        <div className="ml-auto flex items-center gap-1.5">
+          <span className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-green-500" />
+          </span>
+          <span className="text-xs text-green-600 font-semibold">ao vivo</span>
+        </div>
+      </div>
+      {feed.length === 0 ? (
+        <div className="flex flex-col items-center py-10 gap-2">
+          <i className="mdi mdi-broadcast-off text-4xl text-gray-200" aria-hidden="true" />
+          <p className="text-xs text-gray-400">Nenhum reporte ainda. Seja o primeiro!</p>
+        </div>
+      ) : feed.map((item, i) => (
+        <div key={item.id} className={`flex items-center gap-3 px-4 py-3 ${i < feed.length - 1 ? 'border-b border-gray-50' : ''}`}>
+          <i className={`mdi ${FEED_ICON[item.status] || 'mdi-clipboard-text text-gray-400'} text-lg shrink-0`} aria-hidden="true" />
+          <div className="flex-1 min-w-0">
+            <p className="text-xs text-gray-700 leading-snug">
+              <span className="font-semibold">{item.usuario}</span>{' '}reportou{' '}
+              <button
+                onClick={() => onIrParaMedico?.(item.medico)}
+                className="font-semibold text-emerald-700 underline decoration-emerald-200 underline-offset-2 active:opacity-60"
+              >
+                {item.medico}
+              </button>
+            </p>
+            <p className="text-xs text-gray-400 mt-0.5">"{item.acao}" · {item.tempo}</p>
+          </div>
+          <span className="text-xs font-bold text-amber-600 shrink-0">+{item.xp}xp</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function AbaRanking({ data, loading, apelido }) {
+  const corPos = (p) => p === 1 ? 'text-amber-500' : p === 2 ? 'text-gray-400' : p === 3 ? 'text-orange-400' : 'text-gray-300';
+  const ini    = (nome) => nome.split(' ').filter(p => p.length > 1).slice(0, 2).map(p => p[0]).join('').toUpperCase() || nome.slice(0, 2).toUpperCase();
+
+  if (loading) return (
+    <div className="max-w-lg mx-auto px-4 py-16 flex flex-col items-center gap-3">
+      <div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full anim-spin" />
+      <p className="text-sm text-gray-400">Carregando...</p>
+    </div>
+  );
+
+  if (data.length === 0) return (
+    <div className="max-w-lg mx-auto px-4 py-16 flex flex-col items-center gap-3 text-center">
+      <i className="mdi mdi-trophy-outline text-6xl text-gray-200" aria-hidden="true" />
+      <p className="font-bold text-gray-500">Nenhum propagandista ainda</p>
+      <p className="text-sm text-gray-400">Faça o primeiro reporte para entrar no ranking!</p>
+    </div>
+  );
+
+  return (
+    <main className="max-w-lg mx-auto px-4 py-4 pb-28">
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="px-4 py-3 border-b border-gray-50">
+          <p className="font-black text-gray-900 text-sm">Propagandistas</p>
+          <p className="text-xs text-gray-400 mt-0.5">Ranking por XP acumulado</p>
+        </div>
+        {data.map((u, i) => {
+          const euSou = u.apelido === apelido;
+          return (
+            <div key={u.apelido}
+              className={`flex items-center gap-3 px-4 py-3 ${i < data.length - 1 ? 'border-b border-gray-50' : ''} ${euSou ? 'bg-emerald-50 border-l-4 border-l-emerald-500' : ''}`}>
+              <span className={`w-6 text-center text-sm font-black shrink-0 ${corPos(u.posicao)}`}>{u.posicao}</span>
+              <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
+                <span className="text-xs font-black text-emerald-700">{ini(u.apelido)}</span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className={`text-sm font-bold truncate ${euSou ? 'text-emerald-800' : 'text-gray-800'}`}>
+                  {u.apelido}
+                  {euSou && <span className="ml-1.5 text-[10px] font-semibold text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded-full">você</span>}
+                </p>
+                <p className="text-[11px] text-gray-400">{u.reportes} reportes</p>
+              </div>
+              <span className="text-sm font-black text-amber-600 shrink-0 tabular-nums">
+                {u.xp.toLocaleString('pt-BR')} <span className="text-xs font-semibold text-amber-500">XP</span>
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </main>
+  );
+}
+
+function AbaPerfil({ data, apelido, xp }) {
+  const ini = apelido.split(' ').filter(p => p.length > 1).slice(0, 2).map(p => p[0]).join('').toUpperCase() || apelido.slice(0, 2).toUpperCase();
+  return (
+    <main className="max-w-lg mx-auto px-4 py-4 pb-28 space-y-3">
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 flex flex-col items-center text-center">
+        <div className="w-16 h-16 rounded-full bg-emerald-100 border-2 border-emerald-200 flex items-center justify-center mb-3">
+          <span className="text-xl font-black text-emerald-700">{ini}</span>
+        </div>
+        <p className="font-black text-gray-900 text-xl">{apelido}</p>
+        <p className="text-xs text-gray-400 mt-0.5">Propagandista</p>
+        <div className="mt-4 flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-2xl px-5 py-3">
+          <i className="mdi mdi-star text-amber-500 text-xl" aria-hidden="true" />
+          <span className="text-2xl font-black text-amber-600">{xp.toLocaleString('pt-BR')}</span>
+          <span className="text-sm font-semibold text-amber-500">XP total</span>
+        </div>
+      </div>
+      {data ? (
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex flex-col items-center text-center">
+            <span className="text-2xl font-black text-gray-800">{data.reportes}</span>
+            <span className="text-xs text-gray-400 mt-1">Reportes feitos</span>
+          </div>
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex flex-col items-center text-center">
+            <span className="text-2xl font-black text-emerald-600">#{data.posicao}</span>
+            <span className="text-xs text-gray-400 mt-1">no ranking</span>
+          </div>
+        </div>
+      ) : (
+        <div className="flex justify-center py-4">
+          <div className="w-5 h-5 border-2 border-emerald-500 border-t-transparent rounded-full anim-spin" />
+        </div>
+      )}
+    </main>
+  );
+}
+
+function ModalApelido({ onConfirmar }) {
+  const [valor, setValor] = useState('');
+  const confirmar = () => { if (valor.trim()) onConfirmar(valor.trim()); };
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-6" style={{ background: 'rgba(0,0,0,0.75)' }}>
+      <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl">
+        <div className="text-center mb-6">
+          <div className="w-20 h-20 flex items-center justify-center mx-auto mb-4">
+            <img src="/hermes-logo-corpo.svg" alt="Hermes" className="w-full h-full object-contain" />
+          </div>
+          <p className="font-black text-gray-900 text-2xl tracking-tight">Hermes</p>
+          <p className="text-sm text-gray-500 mt-1">Como quer ser identificado?</p>
+        </div>
+        <input type="text" placeholder="Seu apelido (ex: Rafael S.)"
+          value={valor} onChange={e => setValor(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && confirmar()}
+          maxLength={20} autoFocus
+          className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm font-medium text-gray-800 outline-none focus:border-emerald-400 transition-colors mb-4"
+        />
+        <button onClick={confirmar} disabled={!valor.trim()}
+          className="w-full bg-emerald-600 disabled:bg-gray-100 disabled:text-gray-400 text-white font-bold py-3 rounded-xl transition-colors text-sm">
+          Entrar
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function Carregando() {
+  return (
+    <div className="min-h-screen flex items-center justify-center" style={{ background: '#F0FDF4' }}>
+      <div className="flex flex-col items-center gap-4">
+        <img src="/hermes-logo-corpo.svg" alt="Hermes" className="w-14 h-14 object-contain anim-logo" />
+        <div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full anim-spin" />
+        <p className="text-emerald-700 font-semibold text-sm">Conectando...</p>
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────
+   APP PRINCIPAL
+───────────────────────────────────────────── */
+function App() {
+  const apNome = localStorage.getItem('mw_apelido');
+
+  const [medicos, setMedicos]         = useState([]);
+  const [feed, setFeed]               = useState([]);
+  const [xp, setXp]                   = useState(0);
+  const [apelido, setApelido]         = useState(apNome || '');
+  const [showModal, setShowModal]     = useState(!apNome);
+  const [carregando, setCarregando]   = useState(!!apNome);
+  const [filtro, setFiltro]           = useState('todos');
+  const [busca, setBusca]             = useState('');
+  const [buscaQ, setBuscaQ]           = useState('');
+  const [medicoAtivo, setMedicoAtivo] = useState(null);
+  const [notifXp, setNotifXp]         = useState(null);
+  const [aba, setAba]                 = useState('medicos');
+  const [feedNovos, setFeedNovos]       = useState(0);
+  const [undoInfo, setUndoInfo]         = useState(null);
+  const [rankingData, setRankingData]   = useState([]);
+  const [rankingLoading, setRankingLoading] = useState(false);
+  const [perfilData, setPerfilData]     = useState(null);
+
+  const [destacadoId, setDestacadoId] = useState(null);
+
+  const timerBusca       = useRef(null);
+  const socketRef        = useRef(null);
+  const abaRef           = useRef('medicos');
+  const undoTimer        = useRef(null);
+  const rankingLoadedRef = useRef(false);
+  const perfilLoadedRef  = useRef(false);
+
+  useEffect(() => {
+    clearTimeout(timerBusca.current);
+    timerBusca.current = setTimeout(() => setBuscaQ(busca), 300);
+    return () => clearTimeout(timerBusca.current);
+  }, [busca]);
+
+  useEffect(() => {
+    if (apNome) inicializar(apNome);
+    return () => {
+      if (socketRef.current) socketRef.current.disconnect();
+      if (undoTimer.current) clearTimeout(undoTimer.current);
+    };
+  }, []);
+
+  const inicializar = async (ap) => {
+    setCarregando(true);
+    try {
+      const [medicosData, feedData, userData] = await Promise.all([
+        fetch('/api/medicos').then(r => r.json()),
+        fetch('/api/feed').then(r => r.json()),
+        fetch('/api/usuarios', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ apelido: ap }),
+        }).then(r => r.json()),
+      ]);
+      setMedicos(medicosData);
+      setFeed(feedData);
+      setXp(userData.xp_total);
+      conectarSocket();
+    } catch (e) {
+      console.error('[Hermes] Erro ao carregar:', e);
+    } finally {
+      setCarregando(false);
+    }
+  };
+
+  const conectarSocket = () => {
+    if (socketRef.current) socketRef.current.disconnect();
+    const socket = io();
+    socketRef.current = socket;
+
+    socket.on('status_update', ({ medicoId, status, reportadoPor }) => {
+      setMedicos(prev =>
+        prev.map(m => m.id === medicoId ? { ...m, status, ultimoReporte: 'agora', reportadoPor } : m)
+      );
+    });
+
+    socket.on('novo_reporte', (item) => {
+      new Audio('/hermes-notificacao.mp3').play().catch(() => {});
+      setFeed(prev => [item, ...prev.slice(0, 19)]);
+      if (abaRef.current !== 'feed') setFeedNovos(prev => prev + 1);
+    });
+
+    socket.on('local_adicionado', ({ medicoId, local }) => {
+      setMedicos(prev => prev.map(m =>
+        m.id === medicoId ? { ...m, locais: [local, ...m.locais] } : m
+      ));
+    });
+
+    socket.on('reporte_desfeito', ({ reporteId }) => {
+      setFeed(prev => prev.filter(f => f.id !== reporteId));
+    });
+  };
+
+  const confirmarApelido = (ap) => {
+    localStorage.setItem('mw_apelido', ap);
+    setApelido(ap);
+    setShowModal(false);
+    inicializar(ap);
+  };
+
+  const trocarAba = useCallback((id) => {
+    setAba(id);
+    abaRef.current = id;
+    if (id === 'feed') setFeedNovos(0);
+    if (id === 'ranking' && !rankingLoadedRef.current) {
+      rankingLoadedRef.current = true;
+      setRankingLoading(true);
+      fetch('/api/ranking').then(r => r.json()).then(d => { setRankingData(d); setRankingLoading(false); });
+    }
+    if (id === 'perfil' && !perfilLoadedRef.current && apelido) {
+      perfilLoadedRef.current = true;
+      fetch(`/api/usuarios/${encodeURIComponent(apelido)}`).then(r => r.json()).then(setPerfilData);
+    }
+  }, [apelido]);
+
+  const irParaMedico = useCallback((nome) => {
+    const m = medicos.find(m => m.nome === nome);
+    if (!m) return;
+    setFiltro('todos');
+    setBusca('');
+    setBuscaQ('');
+    trocarAba('medicos');
+    setDestacadoId(m.id);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const el = document.getElementById(`medico-${m.id}`);
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    });
+    setTimeout(() => setDestacadoId(null), 2000);
+  }, [medicos, trocarAba]);
+
+  const handleReportar = useCallback(async (medico, opcao) => {
+    setMedicoAtivo(null);
+    setXp(prev => prev + opcao.xp);
+    setNotifXp({ xp: opcao.xp, label: opcao.label, key: Date.now() });
+    try {
+      const data = await fetch('/api/reportes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          medico_id: medico.id,
+          usuario_apelido: apelido,
+          opcao_id: opcao.id,
+          opcao_label: opcao.label,
+          xp: opcao.xp,
+        }),
+      }).then(r => r.json());
+
+      if (undoTimer.current) clearTimeout(undoTimer.current);
+      undoTimer.current = setTimeout(() => setUndoInfo(null), 60000);
+      setUndoInfo({ reporteId: data.id, xp: opcao.xp, label: opcao.label });
+    } catch (e) {
+      console.error('[Hermes] Erro ao reportar:', e);
+    }
+  }, [apelido]);
+
+  const handleAdicionarLocal = useCallback(async (medico, localData) => {
+    const opcaoEndereco = OPCOES_REPORTE.find(o => o.id === 'endereco');
+    setMedicoAtivo(null);
+    setXp(prev => prev + opcaoEndereco.xp);
+    setNotifXp({ xp: opcaoEndereco.xp, label: 'Novo local adicionado', key: Date.now() });
+    try {
+      const [reportData] = await Promise.all([
+        fetch('/api/reportes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            medico_id: medico.id,
+            usuario_apelido: apelido,
+            opcao_id: 'endereco',
+            opcao_label: opcaoEndereco.label,
+            xp: opcaoEndereco.xp,
+          }),
+        }).then(r => r.json()),
+        fetch(`/api/medicos/${medico.id}/locais`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(localData),
+        }),
+      ]);
+
+      if (undoTimer.current) clearTimeout(undoTimer.current);
+      undoTimer.current = setTimeout(() => setUndoInfo(null), 60000);
+      setUndoInfo({ reporteId: reportData.id, xp: opcaoEndereco.xp, label: 'Novo local adicionado' });
+    } catch (e) {
+      console.error('[Hermes] Erro ao adicionar local:', e);
+    }
+  }, [apelido]);
+
+  const fecharUndo = useCallback(() => {
+    clearTimeout(undoTimer.current);
+    setUndoInfo(null);
+  }, []);
+
+  const handleDesfazer = useCallback(async () => {
+    if (!undoInfo) return;
+    clearTimeout(undoTimer.current);
+    const { reporteId, xp: xpUndo } = undoInfo;
+    setXp(prev => Math.max(0, prev - xpUndo));
+    setUndoInfo(null);
+    try {
+      await fetch(`/api/reportes/${reporteId}?apelido=${encodeURIComponent(apelido)}`, {
+        method: 'DELETE',
+      });
+    } catch (e) {
+      console.error('[Hermes] Erro ao desfazer:', e);
+    }
+  }, [undoInfo, apelido]);
+
+  const contadores = useMemo(() => ({
+    todos:       medicos.length,
+    disponiveis: medicos.filter(m => m.status === 'disponivel').length,
+    alertas:     medicos.filter(m => m.status !== 'disponivel').length,
+  }), [medicos]);
+
+  const medicosFiltrados = useMemo(() => {
+    const q = buscaQ.toLowerCase();
+    return medicos.filter(m => {
+      const matchBusca = !q || m.nome.toLowerCase().includes(q) || m.especialidade.toLowerCase().includes(q);
+      const matchFiltro =
+        filtro === 'todos' ||
+        (filtro === 'disponiveis' && m.status === 'disponivel') ||
+        (filtro === 'alertas'     && m.status !== 'disponivel');
+      return matchBusca && matchFiltro;
+    });
+  }, [medicos, buscaQ, filtro]);
+
+  if (showModal)  return <ModalApelido onConfirmar={confirmarApelido} />;
+  if (carregando) return <Carregando />;
+
+  return (
+    <div className="min-h-screen" style={{ background: '#F0FDF4' }}>
+
+      {/* ── HEADER ── */}
+      <header className="sticky top-0 z-30 shadow-md" style={{ background: '#065F46' }}>
+        <div className="max-w-lg mx-auto px-4 pt-3 pb-2 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <img
+              src="/hermes-logo.svg"
+              alt="Hermes"
+              className="w-9 h-9 object-contain"
+              style={{ filter: 'brightness(0) invert(1)' }}
+            />
+            <div>
+              <p className="text-white font-black text-lg leading-none tracking-tight">Hermes</p>
+              <p className="text-emerald-300 text-xs font-medium leading-none mt-0.5">status em tempo real</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5 bg-amber-400 px-3 py-1.5 rounded-full shadow-sm">
+            <i className="mdi mdi-star text-amber-700 text-base" aria-hidden="true" />
+            <span className="text-amber-900 font-black text-sm">{xp.toLocaleString('pt-BR')} XP</span>
+          </div>
+        </div>
+        <div className="max-w-lg mx-auto px-4 pb-3">
+          <div className="relative">
+            <i className="mdi mdi-magnify absolute left-3 top-1/2 -translate-y-1/2 text-white/50 text-lg pointer-events-none" aria-hidden="true" />
+            <input type="search" inputMode="search"
+              placeholder="Buscar médico ou especialidade…"
+              value={busca} onChange={e => setBusca(e.target.value)}
+              className="w-full pl-9 pr-9 py-2.5 rounded-xl bg-white/10 text-white placeholder-white/40 text-sm outline-none focus:bg-white/20 transition-colors border border-white/10"
+            />
+            {busca && (
+              <button onClick={() => { setBusca(''); setBuscaQ(''); }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-white/50 hover:text-white">
+                <i className="mdi mdi-close text-lg" aria-hidden="true" />
+              </button>
+            )}
+          </div>
+        </div>
+      </header>
+
+      {/* ── FILTROS (só na aba Médicos) ── */}
+      {aba === 'medicos' && (
+        <div className="sticky z-20 border-b border-green-100 shadow-sm" style={{ top: 108, background: '#F0FDF4' }}>
+          <div className="max-w-lg mx-auto px-4 py-2.5 flex gap-2 overflow-x-auto">
+            {FILTROS.map(f => {
+              const ativo = filtro === f.id;
+              return (
+                <button key={f.id} onClick={() => setFiltro(f.id)}
+                  className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-bold whitespace-nowrap shrink-0 transition-all duration-150 border-2 ${ativo ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm' : 'bg-white text-gray-500 border-gray-200 hover:border-emerald-300'}`}>
+                  {f.label}
+                  <span className={`text-xs font-black px-1.5 py-0.5 rounded-full leading-none ${ativo ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-400'}`}>
+                    {contadores[f.id]}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── CONTEÚDO ── */}
+      {aba === 'medicos' && (
+        <main className="max-w-lg mx-auto px-4 py-4 pb-28 space-y-3">
+          <FeedCompacto feed={feed} onVerFeed={() => trocarAba('feed')} onIrParaMedico={irParaMedico} />
+          {buscaQ && (
+            <p className="text-xs text-gray-400 px-1">
+              {medicosFiltrados.length === 0
+                ? `Nenhum resultado para "${buscaQ}"`
+                : `${medicosFiltrados.length} resultado${medicosFiltrados.length !== 1 ? 's' : ''} para "${buscaQ}"`}
+            </p>
+          )}
+          {medicosFiltrados.length === 0 && !buscaQ ? (
+            <div className="flex flex-col items-center py-12 gap-2">
+              <i className="mdi mdi-magnify text-5xl text-gray-200" aria-hidden="true" />
+              <p className="font-bold text-gray-500">Nenhum médico nesta categoria</p>
+            </div>
+          ) : (
+            medicosFiltrados.map(m => <MedicoCard key={m.id} medico={m} onReportar={setMedicoAtivo} destacado={m.id === destacadoId} />)
+          )}
+        </main>
+      )}
+
+      {aba === 'feed'    && <main className="max-w-lg mx-auto px-4 py-4 pb-28"><FeedComunidade feed={feed} onIrParaMedico={irParaMedico} /></main>}
+      {aba === 'ranking' && <AbaRanking data={rankingData} loading={rankingLoading} apelido={apelido} />}
+      {aba === 'perfil'  && <AbaPerfil data={perfilData} apelido={apelido} xp={xp} />}
+
+      {/* ── BOTTOM NAV ── */}
+      <nav className="fixed bottom-0 inset-x-0 z-30 bg-white border-t border-gray-100 shadow-lg">
+        <div className="max-w-lg mx-auto flex">
+          {ABAS.map(tab => {
+            const ativo = aba === tab.id;
+            return (
+              <button key={tab.id} onClick={() => trocarAba(tab.id)}
+                className={`flex-1 flex flex-col items-center gap-0.5 py-2.5 transition-colors relative ${ativo ? 'text-emerald-600' : 'text-gray-400'}`}>
+                <span className="relative inline-block">
+                  <i className={`mdi ${tab.icon} text-2xl`} aria-hidden="true" />
+                  {tab.id === 'feed' && feedNovos > 0 && (
+                    <span className="absolute -top-1 -right-1.5 bg-red-500 text-white text-[9px] font-black rounded-full min-w-[16px] h-4 flex items-center justify-center px-0.5 leading-none">
+                      {feedNovos > 9 ? '9+' : feedNovos}
+                    </span>
+                  )}
+                </span>
+                <span className={`text-[10px] font-bold ${ativo ? 'text-emerald-600' : 'text-gray-400'}`}>{tab.label}</span>
+                {ativo && <span className="absolute bottom-0 w-8 h-0.5 rounded-full bg-emerald-500" />}
+              </button>
+            );
+          })}
+        </div>
+      </nav>
+
+      <PainelReporte
+        medico={medicoAtivo}
+        onFechar={() => setMedicoAtivo(null)}
+        onConfirmar={handleReportar}
+        onAdicionarLocal={handleAdicionarLocal}
+      />
+      {notifXp && <XpToast notif={notifXp} onDone={() => setNotifXp(null)} />}
+      <UndoToast undoInfo={undoInfo} onDesfazer={handleDesfazer} onFechar={fecharUndo} />
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
