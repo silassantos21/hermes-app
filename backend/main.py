@@ -103,6 +103,8 @@ def _medico_dict(m: models.Medico) -> dict:
                 "horario": l.horario,
                 "verificado": l.verificado,
                 "diasVerif": l.dias_verif,
+                "telefone": l.telefone,
+                "secretaria": l.secretaria,
                 "adicionadoEm": _tempo_relativo(l.created_at) if l.created_at else None,
             }
             for l in sorted(m.locais, key=lambda x: x.created_at or datetime.min, reverse=True)
@@ -194,6 +196,8 @@ async def adicionar_local(medico_id: int, body: LocalCreate, db: Session = Depen
         horario=body.horario,
         verificado=False,
         dias_verif=0,
+        telefone=body.telefone,
+        secretaria=body.secretaria,
     )
     db.add(local)
     db.commit()
@@ -208,6 +212,8 @@ async def adicionar_local(medico_id: int, body: LocalCreate, db: Session = Depen
             "horario": local.horario,
             "verificado": local.verificado,
             "diasVerif": local.dias_verif,
+            "telefone": local.telefone,
+            "secretaria": local.secretaria,
             "adicionadoEm": "agora",
         },
     })

@@ -64,7 +64,7 @@
     .mdi { line-height: 1; }
   </style>
 </head>
-<body style="background:#F0FDF4">
+<body style="background:#F9FAFB">
 <div id="root"></div>
 
 <script type="text/babel">
@@ -136,12 +136,12 @@ function MedicoCard({ medico, onReportar, destacado }) {
   const iniciais = medico.nome.split(' ').filter(p => p.length > 2).slice(0, 2).map(p => p[0]).join('');
 
   return (
-    <div id={`medico-${medico.id}`} className={`bg-white rounded-2xl border ${s.border} shadow-sm overflow-hidden anim-card${destacado ? ' anim-highlight' : ''}`}>
-      <div className={`h-0.5 w-full ${s.bar}`} />
+    <div id={`medico-${medico.id}`} className={`bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden anim-card${destacado ? ' anim-highlight' : ''}`}>
+      <div className={`h-1 w-full ${s.bar}`} />
       <div className="p-4">
         <div className="flex items-start gap-3 mb-3">
-          <div className={`w-11 h-11 rounded-xl ${s.bg} flex items-center justify-center shrink-0 border ${s.border}`}>
-            <span className={`font-black text-sm ${s.text}`}>{iniciais}</span>
+          <div className="w-11 h-11 rounded-xl bg-gray-100 flex items-center justify-center shrink-0 border border-gray-200">
+            <span className="font-black text-sm text-gray-500">{iniciais}</span>
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-start justify-between gap-2">
@@ -185,6 +185,22 @@ function MedicoCard({ medico, onReportar, destacado }) {
                       <span className="text-[10px] text-gray-400">adicionado {local.adicionadoEm}</span>
                     )}
                   </div>
+                  {(local.telefone || local.secretaria) && (
+                    <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+                      {local.telefone && (
+                        <span className="inline-flex items-center gap-1 text-[11px] text-gray-500">
+                          <i className="mdi mdi-phone-outline text-gray-400 text-xs" aria-hidden="true" />
+                          {local.telefone}
+                        </span>
+                      )}
+                      {local.secretaria && (
+                        <span className="inline-flex items-center gap-1 text-[11px] text-gray-500">
+                          <i className="mdi mdi-account-outline text-gray-400 text-xs" aria-hidden="true" />
+                          {local.secretaria}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -209,17 +225,28 @@ function MedicoCard({ medico, onReportar, destacado }) {
 }
 
 /* ── Bottom sheet de reporte com 2 passos ── */
+const TIPOS_LOGRADOURO = ['Rua', 'Avenida', 'Alameda', 'Travessa', 'Praça', 'Rodovia', 'Estrada', 'Boulevard'];
+
 function PainelReporte({ medico, onFechar, onConfirmar, onAdicionarLocal }) {
-  const [passo, setPasso]         = useState('opcoes');
-  const [novoEnd, setNovoEnd]     = useState('');
-  const [diasSel, setDiasSel]     = useState([]);
-  const [horPreset, setHorPreset] = useState('');
-  const [horCustom, setHorCustom] = useState('');
-  const [swipeX, setSwipeX]       = useState(0);
+  const [passo, setPasso]           = useState('opcoes');
+  const [tipoLog, setTipoLog]       = useState('Rua');
+  const [nomeRua, setNomeRua]       = useState('');
+  const [numEnd, setNumEnd]         = useState('');
+  const [compEnd, setCompEnd]       = useState('');
+  const [telefoneEnd, setTelefoneEnd] = useState('');
+  const [secretariaEnd, setSecretariaEnd] = useState('');
+  const [diasSel, setDiasSel]       = useState([]);
+  const [horPreset, setHorPreset]   = useState('');
+  const [horCustom, setHorCustom]   = useState('');
+  const [swipeX, setSwipeX]         = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const touchRef = useRef({ startX: 0, startY: 0, lockH: false, lockV: false });
 
-  const resetEndereco = () => { setNovoEnd(''); setDiasSel([]); setHorPreset(''); setHorCustom(''); };
+  const resetEndereco = () => {
+    setTipoLog('Rua'); setNomeRua(''); setNumEnd(''); setCompEnd('');
+    setTelefoneEnd(''); setSecretariaEnd('');
+    setDiasSel([]); setHorPreset(''); setHorCustom('');
+  };
 
   useEffect(() => {
     if (!medico) { setPasso('opcoes'); resetEndereco(); }
@@ -242,11 +269,14 @@ function PainelReporte({ medico, onFechar, onConfirmar, onAdicionarLocal }) {
   };
 
   const handleSubmit = () => {
-    if (!novoEnd.trim() || diasSel.length === 0) return;
+    if (!nomeRua.trim() || !numEnd.trim() || diasSel.length === 0) return;
+    const endereco = `${tipoLog} ${nomeRua.trim()}, ${numEnd.trim()}${compEnd.trim() ? ` — ${compEnd.trim()}` : ''}`;
     onAdicionarLocal(medico, {
-      endereco: novoEnd.trim(),
+      endereco,
       dias: diasFormatados,
       horario: horarioFinal || 'A confirmar',
+      telefone: telefoneEnd.trim() || null,
+      secretaria: secretariaEnd.trim() || null,
     });
   };
 
@@ -342,16 +372,54 @@ function PainelReporte({ medico, onFechar, onConfirmar, onAdicionarLocal }) {
 
                 <div className="space-y-4">
 
-                  {/* Endereço */}
+                  {/* Endereço estruturado */}
                   <div>
-                    <label className="flex items-center gap-1.5 text-xs font-bold text-gray-500 mb-1.5">
-                      <i className="mdi mdi-map-marker text-gray-400 text-sm" aria-hidden="true" /> Endereço completo *
+                    <label className="flex items-center gap-1.5 text-xs font-bold text-gray-500 mb-2">
+                      <i className="mdi mdi-map-marker text-gray-400 text-sm" aria-hidden="true" /> Endereço *
                     </label>
-                    <input type="text" placeholder="Rua, número · Bairro, Cidade, UF"
-                      value={novoEnd} onChange={e => setNovoEnd(e.target.value)}
-                      autoFocus
-                      className="w-full border-2 border-gray-200 focus:border-blue-400 rounded-xl px-4 py-2.5 text-sm outline-none transition-colors"
-                    />
+                    <div className="flex gap-2 mb-2">
+                      <select value={tipoLog} onChange={e => setTipoLog(e.target.value)}
+                        className="border-2 border-gray-200 focus:border-blue-400 rounded-xl px-3 py-2.5 text-sm outline-none transition-colors bg-white shrink-0">
+                        {TIPOS_LOGRADOURO.map(t => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                      <input type="text" placeholder="Nome da rua *"
+                        value={nomeRua} onChange={e => setNomeRua(e.target.value)}
+                        autoFocus
+                        className="flex-1 border-2 border-gray-200 focus:border-blue-400 rounded-xl px-3 py-2.5 text-sm outline-none transition-colors"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <input type="text" placeholder="Número *"
+                        value={numEnd} onChange={e => setNumEnd(e.target.value)}
+                        className="w-24 border-2 border-gray-200 focus:border-blue-400 rounded-xl px-3 py-2.5 text-sm outline-none transition-colors"
+                      />
+                      <input type="text" placeholder="Complemento (sala, andar…)"
+                        value={compEnd} onChange={e => setCompEnd(e.target.value)}
+                        className="flex-1 border-2 border-gray-200 focus:border-blue-400 rounded-xl px-3 py-2.5 text-sm outline-none transition-colors"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Telefone e Secretária */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="flex items-center gap-1 text-xs font-bold text-gray-500 mb-1.5">
+                        <i className="mdi mdi-phone-outline text-gray-400 text-sm" aria-hidden="true" /> Telefone
+                      </label>
+                      <input type="tel" placeholder="(31) 99999-0000"
+                        value={telefoneEnd} onChange={e => setTelefoneEnd(e.target.value)}
+                        className="w-full border-2 border-gray-200 focus:border-blue-400 rounded-xl px-3 py-2.5 text-sm outline-none transition-colors"
+                      />
+                    </div>
+                    <div>
+                      <label className="flex items-center gap-1 text-xs font-bold text-gray-500 mb-1.5">
+                        <i className="mdi mdi-account-outline text-gray-400 text-sm" aria-hidden="true" /> Secretária
+                      </label>
+                      <input type="text" placeholder="Nome da secretária"
+                        value={secretariaEnd} onChange={e => setSecretariaEnd(e.target.value)}
+                        className="w-full border-2 border-gray-200 focus:border-blue-400 rounded-xl px-3 py-2.5 text-sm outline-none transition-colors"
+                      />
+                    </div>
                   </div>
 
                   {/* Dias — chips toggleáveis */}
@@ -430,7 +498,7 @@ function PainelReporte({ medico, onFechar, onConfirmar, onAdicionarLocal }) {
                 <p className="text-[11px] text-gray-400 mt-4 leading-relaxed">
                   O local aparecerá com badge "Verificação pendente" até ser confirmado pela comunidade.
                 </p>
-                <button onClick={handleSubmit} disabled={!novoEnd.trim() || diasSel.length === 0}
+                <button onClick={handleSubmit} disabled={!nomeRua.trim() || !numEnd.trim() || diasSel.length === 0}
                   className="w-full mt-3 py-3 rounded-2xl bg-blue-500 disabled:bg-gray-100 disabled:text-gray-400 text-white font-bold text-sm transition-colors active:scale-[0.98]">
                   Confirmar novo local (+30 XP)
                 </button>

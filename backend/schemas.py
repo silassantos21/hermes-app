@@ -17,3 +17,5 @@ class LocalCreate(BaseModel):
     endereco: str
     dias: str
     horario: str
+    telefone: str | None = None
+    secretaria: str | None = None
