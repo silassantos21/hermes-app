@@ -1,4 +1,5 @@
 import asyncio
+import json
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -12,7 +13,7 @@ from sqlalchemy.orm import Session
 import models
 import schemas
 from database import SessionLocal, engine, get_db
-from schemas import LocalCreate
+from schemas import ConfirmarCreate, LocalCreate
 from seed import seed_database
 
 # ── Banco: cria tabelas e seed inicial ───────────────────
@@ -109,6 +110,21 @@ def _medico_dict(m: models.Medico) -> dict:
             }
             for l in sorted(m.locais, key=lambda x: x.created_at or datetime.min, reverse=True)
         ],
+        "locaisPendentes": [
+            {
+                "id": lp.id,
+                "endereco": lp.endereco,
+                "dias": lp.dias,
+                "horario": lp.horario,
+                "telefone": lp.telefone,
+                "secretaria": lp.secretaria,
+                "propostoPor": lp.proposto_por,
+                "confirmacoes": len(json.loads(lp.confirmados or "[]")),
+                "confirmados": json.loads(lp.confirmados or "[]"),
+                "threshold": lp.threshold,
+            }
+            for lp in m.locais_pendentes
+        ],
     }
 
 
@@ -189,35 +205,138 @@ async def adicionar_local(medico_id: int, body: LocalCreate, db: Session = Depen
     if not medico:
         raise HTTPException(status_code=404, detail="Médico não encontrado")
 
-    local = models.Local(
-        medico_id=medico_id,
-        endereco=body.endereco,
-        dias=body.dias,
-        horario=body.horario,
-        verificado=False,
-        dias_verif=0,
-        telefone=body.telefone,
-        secretaria=body.secretaria,
-    )
-    db.add(local)
-    db.commit()
-    db.refresh(local)
+    usuario = db.query(models.Usuario).filter(models.Usuario.apelido == body.usuario_apelido).first()
+    xp_usuario = usuario.xp_total if usuario else 0
 
-    await sio.emit("local_adicionado", {
-        "medicoId": medico_id,
-        "local": {
-            "id": local.id,
+    if xp_usuario >= 200:
+        local = models.Local(
+            medico_id=medico_id,
+            endereco=body.endereco,
+            dias=body.dias,
+            horario=body.horario,
+            verificado=True,
+            dias_verif=0,
+            telefone=body.telefone,
+            secretaria=body.secretaria,
+        )
+        db.add(local)
+        db.commit()
+        db.refresh(local)
+
+        await sio.emit("local_adicionado", {
+            "medicoId": medico_id,
+            "local": {
+                "id": local.id,
+                "endereco": local.endereco,
+                "dias": local.dias,
+                "horario": local.horario,
+                "verificado": local.verificado,
+                "diasVerif": local.dias_verif,
+                "telefone": local.telefone,
+                "secretaria": local.secretaria,
+                "adicionadoEm": "agora",
+            },
+        })
+        return {"ok": True, "pendente": False, "id": local.id}
+    else:
+        pendente = models.LocalPendente(
+            medico_id=medico_id,
+            endereco=body.endereco,
+            dias=body.dias,
+            horario=body.horario,
+            telefone=body.telefone,
+            secretaria=body.secretaria,
+            proposto_por=body.usuario_apelido,
+            confirmados="[]",
+            threshold=3,
+        )
+        db.add(pendente)
+        db.commit()
+        db.refresh(pendente)
+
+        await sio.emit("local_pendente_criado", {
+            "medicoId": medico_id,
+            "pendente": {
+                "id": pendente.id,
+                "endereco": pendente.endereco,
+                "dias": pendente.dias,
+                "horario": pendente.horario,
+                "telefone": pendente.telefone,
+                "secretaria": pendente.secretaria,
+                "propostoPor": pendente.proposto_por,
+                "confirmacoes": 0,
+                "confirmados": [],
+                "threshold": pendente.threshold,
+            },
+        })
+        return {"ok": True, "pendente": True, "id": pendente.id}
+
+
+@fastapi_app.post("/api/locais-pendentes/{pendente_id}/confirmar")
+async def confirmar_local_pendente(pendente_id: int, body: ConfirmarCreate, db: Session = Depends(get_db)):
+    pendente = db.query(models.LocalPendente).filter(models.LocalPendente.id == pendente_id).first()
+    if not pendente:
+        raise HTTPException(status_code=404, detail="Local pendente não encontrado")
+
+    confirmados = json.loads(pendente.confirmados or "[]")
+
+    if body.apelido == pendente.proposto_por:
+        raise HTTPException(status_code=400, detail="Não pode confirmar a própria sugestão")
+    if body.apelido in confirmados:
+        raise HTTPException(status_code=400, detail="Já confirmou este local")
+
+    confirmados.append(body.apelido)
+    pendente.confirmados = json.dumps(confirmados)
+    medico_id = pendente.medico_id
+
+    if len(confirmados) >= pendente.threshold:
+        local = models.Local(
+            medico_id=medico_id,
+            endereco=pendente.endereco,
+            dias=pendente.dias,
+            horario=pendente.horario,
+            verificado=True,
+            dias_verif=0,
+            telefone=pendente.telefone,
+            secretaria=pendente.secretaria,
+        )
+        db.add(local)
+        pendente_id_emit = pendente.id
+        db.delete(pendente)
+        db.commit()
+        db.refresh(local)
+
+        await sio.emit("local_adicionado", {
+            "medicoId": medico_id,
+            "local": {
+                "id": local.id,
+                "endereco": local.endereco,
+                "dias": local.dias,
+                "horario": local.horario,
+                "verificado": local.verificado,
+                "diasVerif": local.dias_verif,
+                "telefone": local.telefone,
+                "secretaria": local.secretaria,
+                "adicionadoEm": "agora",
+            },
+        })
+        await sio.emit("local_pendente_promovido", {
+            "medicoId": medico_id,
+            "pendenteId": pendente_id_emit,
+            "medicoNome": medico.nome,
             "endereco": local.endereco,
-            "dias": local.dias,
-            "horario": local.horario,
-            "verificado": local.verificado,
-            "diasVerif": local.dias_verif,
-            "telefone": local.telefone,
-            "secretaria": local.secretaria,
-            "adicionadoEm": "agora",
-        },
-    })
-    return {"ok": True, "id": local.id}
+        })
+    else:
+        db.commit()
+        await sio.emit("confirmacao_adicionada", {
+            "medicoId": medico_id,
+            "pendenteId": pendente_id,
+            "confirmacoes": len(confirmados),
+            "confirmados": confirmados,
+            "threshold": pendente.threshold,
+        })
+
+    return {"ok": True}
 
 
 @fastapi_app.delete("/api/reportes/{reporte_id}")

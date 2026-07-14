@@ -19,3 +19,8 @@ class LocalCreate(BaseModel):
     horario: str
     telefone: str | None = None
     secretaria: str | None = None
+    usuario_apelido: str = ""
+
+
+class ConfirmarCreate(BaseModel):
+    apelido: str

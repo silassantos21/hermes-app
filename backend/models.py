@@ -19,7 +19,8 @@ class Medico(Base):
     total_reportes = Column(Integer, default=0)
     updated_at     = Column(DateTime, default=datetime.utcnow)
 
-    locais = relationship("Local", back_populates="medico", cascade="all, delete-orphan")
+    locais           = relationship("Local",         back_populates="medico", cascade="all, delete-orphan")
+    locais_pendentes = relationship("LocalPendente", back_populates="medico", cascade="all, delete-orphan")
 
 
 class Local(Base):
@@ -37,6 +38,24 @@ class Local(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     medico = relationship("Medico", back_populates="locais")
+
+
+class LocalPendente(Base):
+    __tablename__ = "locais_pendentes"
+
+    id           = Column(Integer, primary_key=True, index=True)
+    medico_id    = Column(Integer, ForeignKey("medicos.id"), nullable=False)
+    endereco     = Column(String, nullable=False)
+    dias         = Column(String, nullable=False)
+    horario      = Column(String, nullable=False)
+    telefone     = Column(String, nullable=True)
+    secretaria   = Column(String, nullable=True)
+    proposto_por = Column(String, nullable=False)
+    confirmados  = Column(String, default="[]")  # JSON list de apelidos
+    threshold    = Column(Integer, default=3)
+    created_at   = Column(DateTime, default=datetime.utcnow)
+
+    medico = relationship("Medico", back_populates="locais_pendentes")
 
 
 class Reporte(Base):
