@@ -297,12 +297,22 @@ function mascaraNumeroEnd(v) {
   return v.replace(/[^0-9A-Za-z\/]/g, '').slice(0, 8).toUpperCase();
 }
 
-function PainelReporte({ medico, onFechar, onConfirmar, onAdicionarLocal }) {
+function mascaraCep(v) {
+  const d = v.replace(/\D/g, '').slice(0, 8);
+  return d.length <= 5 ? d : `${d.slice(0, 5)}-${d.slice(5)}`;
+}
+
+function PainelReporte({ medico, onFechar, onConfirmar, onAdicionarLocal, opcoesCidades, opcoesBairros }) {
   const [passo, setPasso]           = useState('opcoes');
   const [tipoLog, setTipoLog]       = useState('Rua');
   const [nomeRua, setNomeRua]       = useState('');
   const [numEnd, setNumEnd]         = useState('');
   const [compEnd, setCompEnd]       = useState('');
+  const [bairroEnd, setBairroEnd]   = useState('');
+  const [cidadeEnd, setCidadeEnd]   = useState('');
+  const [cep, setCep]               = useState('');
+  const [cepCarregando, setCepCarregando] = useState(false);
+  const [cepErro, setCepErro]       = useState('');
   const [telefoneEnd, setTelefoneEnd] = useState('');
   const [secretariaEnd, setSecretariaEnd] = useState('');
   const [diasSel, setDiasSel]       = useState([]);
@@ -314,8 +324,43 @@ function PainelReporte({ medico, onFechar, onConfirmar, onAdicionarLocal }) {
 
   const resetEndereco = () => {
     setTipoLog('Rua'); setNomeRua(''); setNumEnd(''); setCompEnd('');
+    setBairroEnd(''); setCidadeEnd(''); setCep(''); setCepErro('');
     setTelefoneEnd(''); setSecretariaEnd('');
     setDiasSel([]); setHorPreset(''); setHorCustom('');
+  };
+
+  const handleCep = async (v) => {
+    const masked = mascaraCep(v);
+    setCep(masked);
+    setCepErro('');
+    const digits = masked.replace(/\D/g, '');
+    if (digits.length === 8) {
+      setCepCarregando(true);
+      try {
+        const data = await fetch(`https://viacep.com.br/ws/${digits}/json/`).then(r => r.json());
+        if (data.erro) {
+          setCepErro('CEP não encontrado');
+        } else {
+          let tipo = 'Rua';
+          let rua = data.logradouro || '';
+          for (const t of TIPOS_LOGRADOURO) {
+            if (rua.toLowerCase().startsWith(t.toLowerCase())) {
+              tipo = t;
+              rua = rua.slice(t.length).trim().replace(/^[,.\s]+/, '');
+              break;
+            }
+          }
+          setTipoLog(tipo);
+          setNomeRua(rua);
+          setBairroEnd(data.bairro || '');
+          setCidadeEnd(data.localidade || '');
+        }
+      } catch {
+        setCepErro('Erro ao buscar CEP');
+      } finally {
+        setCepCarregando(false);
+      }
+    }
   };
 
   useEffect(() => {
@@ -339,7 +384,7 @@ function PainelReporte({ medico, onFechar, onConfirmar, onAdicionarLocal }) {
   };
 
   const handleSubmit = () => {
-    if (!nomeRua.trim() || !numEnd.trim() || diasSel.length === 0) return;
+    if (!nomeRua.trim() || !numEnd.trim() || diasSel.length === 0 || !bairroEnd.trim() || !cidadeEnd.trim()) return;
     const endereco = `${tipoLog} ${nomeRua.trim()}, ${numEnd.trim()}${compEnd.trim() ? ` — ${compEnd.trim()}` : ''}`;
     onAdicionarLocal(medico, {
       endereco,
@@ -347,6 +392,8 @@ function PainelReporte({ medico, onFechar, onConfirmar, onAdicionarLocal }) {
       horario: horarioFinal || 'A confirmar',
       telefone: telefoneEnd.trim() || null,
       secretaria: secretariaEnd.trim() || null,
+      bairro: bairroEnd.trim(),
+      cidade: cidadeEnd.trim(),
     });
   };
 
@@ -442,6 +489,22 @@ function PainelReporte({ medico, onFechar, onConfirmar, onAdicionarLocal }) {
 
                 <div className="space-y-4">
 
+                  {/* CEP (opcional) */}
+                  <div>
+                    <label className="flex items-center gap-1.5 text-xs font-bold text-gray-500 mb-2">
+                      <i className="mdi mdi-magnify text-gray-400 text-sm" aria-hidden="true" /> CEP
+                      <span className="text-gray-400 font-normal">(opcional — preenche o endereço automaticamente)</span>
+                    </label>
+                    <div className="flex gap-2 items-center">
+                      <input type="text" placeholder="00000-000" inputMode="numeric"
+                        value={cep} onChange={e => handleCep(e.target.value)}
+                        className="w-36 border-2 border-gray-200 focus:border-blue-400 rounded-xl px-3 py-2.5 text-sm outline-none transition-colors"
+                      />
+                      {cepCarregando && <i className="mdi mdi-loading mdi-spin text-gray-400 text-lg" aria-hidden="true" />}
+                      {cepErro && <span className="text-xs text-red-500">{cepErro}</span>}
+                    </div>
+                  </div>
+
                   {/* Endereço estruturado */}
                   <div>
                     <label className="flex items-center gap-1.5 text-xs font-bold text-gray-500 mb-2">
@@ -454,11 +517,10 @@ function PainelReporte({ medico, onFechar, onConfirmar, onAdicionarLocal }) {
                       </select>
                       <input type="text" placeholder="Nome da rua *"
                         value={nomeRua} onChange={e => setNomeRua(e.target.value)}
-                        autoFocus
                         className="flex-1 border-2 border-gray-200 focus:border-blue-400 rounded-xl px-3 py-2.5 text-sm outline-none transition-colors"
                       />
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 mb-2">
                       <input type="text" placeholder="Número *" inputMode="numeric"
                         value={numEnd} onChange={e => setNumEnd(mascaraNumeroEnd(e.target.value))}
                         className="w-24 border-2 border-gray-200 focus:border-blue-400 rounded-xl px-3 py-2.5 text-sm outline-none transition-colors"
@@ -467,6 +529,26 @@ function PainelReporte({ medico, onFechar, onConfirmar, onAdicionarLocal }) {
                         value={compEnd} onChange={e => setCompEnd(e.target.value)}
                         className="flex-1 border-2 border-gray-200 focus:border-blue-400 rounded-xl px-3 py-2.5 text-sm outline-none transition-colors"
                       />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <input type="text" placeholder="Bairro *" list="bairros-list"
+                          value={bairroEnd} onChange={e => setBairroEnd(e.target.value)}
+                          className="w-full border-2 border-gray-200 focus:border-blue-400 rounded-xl px-3 py-2.5 text-sm outline-none transition-colors"
+                        />
+                        <datalist id="bairros-list">
+                          {(opcoesBairros || []).map(b => <option key={b} value={b} />)}
+                        </datalist>
+                      </div>
+                      <div>
+                        <input type="text" placeholder="Cidade *" list="cidades-list"
+                          value={cidadeEnd} onChange={e => setCidadeEnd(e.target.value)}
+                          className="w-full border-2 border-gray-200 focus:border-blue-400 rounded-xl px-3 py-2.5 text-sm outline-none transition-colors"
+                        />
+                        <datalist id="cidades-list">
+                          {(opcoesCidades || []).map(c => <option key={c} value={c} />)}
+                        </datalist>
+                      </div>
                     </div>
                   </div>
 
@@ -568,7 +650,7 @@ function PainelReporte({ medico, onFechar, onConfirmar, onAdicionarLocal }) {
                 <p className="text-[11px] text-gray-400 mt-4 leading-relaxed">
                   Com 200+ XP o local é adicionado imediatamente. Abaixo disso, aguarda 3 confirmações de outros propagandistas.
                 </p>
-                <button onClick={handleSubmit} disabled={!nomeRua.trim() || !numEnd.trim() || diasSel.length === 0}
+                <button onClick={handleSubmit} disabled={!nomeRua.trim() || !numEnd.trim() || diasSel.length === 0 || !bairroEnd.trim() || !cidadeEnd.trim()}
                   className="w-full mt-3 py-3 rounded-2xl bg-blue-500 disabled:bg-gray-100 disabled:text-gray-400 text-white font-bold text-sm transition-colors active:scale-[0.98]">
                   Confirmar novo local (+30 XP)
                 </button>
@@ -898,7 +980,11 @@ function App() {
   const [apelido, setApelido]         = useState(apNome || '');
   const [showModal, setShowModal]     = useState(!apNome);
   const [carregando, setCarregando]   = useState(!!apNome);
-  const [filtro, setFiltro]           = useState('todos');
+  const [filtroStatus,         setFiltroStatus]         = useState('todos');
+  const [filtroEspecialidades, setFiltroEspecialidades] = useState([]);
+  const [filtroCidades,        setFiltroCidades]        = useState([]);
+  const [filtroDias,           setFiltroDias]           = useState([]);
+  const [showFiltros,          setShowFiltros]          = useState(false);
   const [busca, setBusca]             = useState('');
   const [buscaQ, setBuscaQ]           = useState('');
   const [medicoAtivo, setMedicoAtivo] = useState(null);
@@ -1044,7 +1130,11 @@ function App() {
   const irParaMedico = useCallback((nome) => {
     const m = medicos.find(m => m.nome === nome);
     if (!m) return;
-    setFiltro('todos');
+    setFiltroStatus('todos');
+    setFiltroEspecialidades([]);
+    setFiltroCidades([]);
+    setFiltroDias([]);
+    setShowFiltros(false);
     setBusca('');
     setBuscaQ('');
     trocarAba('medicos');
@@ -1158,17 +1248,36 @@ function App() {
     alertas:     medicos.filter(m => m.status !== 'disponivel').length,
   }), [medicos]);
 
+  const opcoesEspecialidades = useMemo(() =>
+    [...new Set(medicos.map(m => m.especialidade))].sort(), [medicos]);
+
+  const opcoesCidades = useMemo(() =>
+    [...new Set(medicos.flatMap(m => m.locais.map(l => l.cidade).filter(Boolean)))].sort(), [medicos]);
+
+  const opcoesBairros = useMemo(() =>
+    [...new Set(medicos.flatMap(m => m.locais.map(l => l.bairro).filter(Boolean)))].sort(), [medicos]);
+
+  const totalFiltrosAtivos = filtroEspecialidades.length + filtroCidades.length + filtroDias.length;
+
+  const toggleArr = (arr, setArr, v) =>
+    setArr(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v]);
+
   const medicosFiltrados = useMemo(() => {
     const q = buscaQ.toLowerCase();
     return medicos.filter(m => {
-      const matchBusca = !q || m.nome.toLowerCase().includes(q) || m.especialidade.toLowerCase().includes(q);
-      const matchFiltro =
-        filtro === 'todos' ||
-        (filtro === 'disponiveis' && m.status === 'disponivel') ||
-        (filtro === 'alertas'     && m.status !== 'disponivel');
-      return matchBusca && matchFiltro;
+      const matchBusca  = !q || m.nome.toLowerCase().includes(q) || m.especialidade.toLowerCase().includes(q);
+      const matchStatus =
+        filtroStatus === 'todos' ||
+        (filtroStatus === 'disponiveis' && m.status === 'disponivel') ||
+        (filtroStatus === 'alertas'     && m.status !== 'disponivel');
+      const matchEsp = filtroEspecialidades.length === 0 || filtroEspecialidades.includes(m.especialidade);
+      const matchCid = filtroCidades.length === 0 || m.locais.some(l => filtroCidades.includes(l.cidade));
+      const matchDia = filtroDias.length === 0 || m.locais.some(l =>
+        filtroDias.some(d => (l.dias || '').includes(d))
+      );
+      return matchBusca && matchStatus && matchEsp && matchCid && matchDia;
     });
-  }, [medicos, buscaQ, filtro]);
+  }, [medicos, buscaQ, filtroStatus, filtroEspecialidades, filtroCidades, filtroDias]);
 
   if (showModal)  return <ModalApelido onConfirmar={confirmarApelido} />;
   if (carregando) return <Carregando />;
@@ -1216,12 +1325,13 @@ function App() {
 
       {/* ── FILTROS (só na aba Médicos) ── */}
       {aba === 'medicos' && (
-        <div className="sticky z-20 border-b border-green-100 shadow-sm" style={{ top: 108, background: '#F0FDF4' }}>
-          <div className="max-w-lg mx-auto px-4 py-2.5 flex gap-2 overflow-x-auto">
+        <div className="sticky z-20 border-b border-gray-200 shadow-sm" style={{ top: 108, background: '#F9FAFB' }}>
+          {/* Linha 1: chips de status + botão Filtros */}
+          <div className="max-w-lg mx-auto px-4 py-2.5 flex gap-2 overflow-x-auto items-center">
             {FILTROS.map(f => {
-              const ativo = filtro === f.id;
+              const ativo = filtroStatus === f.id;
               return (
-                <button key={f.id} onClick={() => setFiltro(f.id)}
+                <button key={f.id} onClick={() => setFiltroStatus(f.id)}
                   className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-bold whitespace-nowrap shrink-0 transition-all duration-150 border-2 ${ativo ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm' : 'bg-white text-gray-500 border-gray-200 hover:border-emerald-300'}`}>
                   {f.label}
                   <span className={`text-xs font-black px-1.5 py-0.5 rounded-full leading-none ${ativo ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-400'}`}>
@@ -1230,7 +1340,79 @@ function App() {
                 </button>
               );
             })}
+            <div className="ml-auto shrink-0">
+              <button onClick={() => setShowFiltros(v => !v)}
+                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-sm font-bold whitespace-nowrap transition-all duration-150 border-2 ${showFiltros || totalFiltrosAtivos > 0 ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm' : 'bg-white text-gray-500 border-gray-200 hover:border-emerald-300'}`}>
+                <i className="mdi mdi-tune-variant text-base" aria-hidden="true" />
+                Filtros
+                {totalFiltrosAtivos > 0 && (
+                  <span className="bg-white/20 text-white text-xs font-black px-1.5 py-0.5 rounded-full leading-none">
+                    {totalFiltrosAtivos}
+                  </span>
+                )}
+              </button>
+            </div>
           </div>
+
+          {/* Linha 2: painel expansível */}
+          {showFiltros && (
+            <div className="max-w-lg mx-auto px-4 pb-3 border-t border-gray-100">
+              {opcoesEspecialidades.length > 0 && (
+                <div className="mt-3">
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Especialidade</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {opcoesEspecialidades.map(e => {
+                      const ativo = filtroEspecialidades.includes(e);
+                      return (
+                        <button key={e} onClick={() => toggleArr(filtroEspecialidades, setFiltroEspecialidades, e)}
+                          className={`px-3 py-1 rounded-full text-xs font-bold border transition-all duration-150 ${ativo ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-gray-500 border-gray-200 hover:border-emerald-300'}`}>
+                          {e}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              {opcoesCidades.length > 0 && (
+                <div className="mt-3">
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Cidade</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {opcoesCidades.map(c => {
+                      const ativo = filtroCidades.includes(c);
+                      return (
+                        <button key={c} onClick={() => toggleArr(filtroCidades, setFiltroCidades, c)}
+                          className={`px-3 py-1 rounded-full text-xs font-bold border transition-all duration-150 ${ativo ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-gray-500 border-gray-200 hover:border-emerald-300'}`}>
+                          {c}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              <div className="mt-3">
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Dia da semana</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {DIAS_SEMANA.map(d => {
+                    const ativo = filtroDias.includes(d);
+                    return (
+                      <button key={d} onClick={() => toggleArr(filtroDias, setFiltroDias, d)}
+                        className={`px-3 py-1 rounded-full text-xs font-bold border transition-all duration-150 ${ativo ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-gray-500 border-gray-200 hover:border-emerald-300'}`}>
+                        {d}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              {totalFiltrosAtivos > 0 && (
+                <div className="mt-3 flex justify-end">
+                  <button onClick={() => { setFiltroEspecialidades([]); setFiltroCidades([]); setFiltroDias([]); }}
+                    className="text-xs font-bold text-gray-400 hover:text-red-500 transition-colors">
+                    Limpar filtros
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -1289,6 +1471,8 @@ function App() {
         onFechar={() => setMedicoAtivo(null)}
         onConfirmar={handleReportar}
         onAdicionarLocal={handleAdicionarLocal}
+        opcoesCidades={opcoesCidades}
+        opcoesBairros={opcoesBairros}
       />
       {notifXp && <XpToast notif={notifXp} onDone={() => setNotifXp(null)} />}
       <UndoToast undoInfo={undoInfo} onDesfazer={handleDesfazer} onFechar={fecharUndo} />

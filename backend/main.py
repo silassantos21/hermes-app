@@ -106,6 +106,8 @@ def _medico_dict(m: models.Medico) -> dict:
                 "diasVerif": l.dias_verif,
                 "telefone": l.telefone,
                 "secretaria": l.secretaria,
+                "bairro": l.bairro,
+                "cidade": l.cidade,
                 "adicionadoEm": _tempo_relativo(l.created_at) if l.created_at else None,
             }
             for l in sorted(m.locais, key=lambda x: x.created_at or datetime.min, reverse=True)
@@ -118,6 +120,8 @@ def _medico_dict(m: models.Medico) -> dict:
                 "horario": lp.horario,
                 "telefone": lp.telefone,
                 "secretaria": lp.secretaria,
+                "bairro": lp.bairro,
+                "cidade": lp.cidade,
                 "propostoPor": lp.proposto_por,
                 "confirmacoes": len(json.loads(lp.confirmados or "[]")),
                 "confirmados": json.loads(lp.confirmados or "[]"),
@@ -218,6 +222,8 @@ async def adicionar_local(medico_id: int, body: LocalCreate, db: Session = Depen
             dias_verif=0,
             telefone=body.telefone,
             secretaria=body.secretaria,
+            bairro=body.bairro,
+            cidade=body.cidade,
         )
         db.add(local)
         db.commit()
@@ -234,6 +240,8 @@ async def adicionar_local(medico_id: int, body: LocalCreate, db: Session = Depen
                 "diasVerif": local.dias_verif,
                 "telefone": local.telefone,
                 "secretaria": local.secretaria,
+                "bairro": local.bairro,
+                "cidade": local.cidade,
                 "adicionadoEm": "agora",
             },
         })
@@ -246,6 +254,8 @@ async def adicionar_local(medico_id: int, body: LocalCreate, db: Session = Depen
             horario=body.horario,
             telefone=body.telefone,
             secretaria=body.secretaria,
+            bairro=body.bairro,
+            cidade=body.cidade,
             proposto_por=body.usuario_apelido,
             confirmados="[]",
             threshold=3,
@@ -263,6 +273,8 @@ async def adicionar_local(medico_id: int, body: LocalCreate, db: Session = Depen
                 "horario": pendente.horario,
                 "telefone": pendente.telefone,
                 "secretaria": pendente.secretaria,
+                "bairro": pendente.bairro,
+                "cidade": pendente.cidade,
                 "propostoPor": pendente.proposto_por,
                 "confirmacoes": 0,
                 "confirmados": [],
@@ -299,6 +311,8 @@ async def confirmar_local_pendente(pendente_id: int, body: ConfirmarCreate, db: 
             dias_verif=0,
             telefone=pendente.telefone,
             secretaria=pendente.secretaria,
+            bairro=pendente.bairro,
+            cidade=pendente.cidade,
         )
         db.add(local)
         pendente_id_emit = pendente.id
@@ -317,6 +331,8 @@ async def confirmar_local_pendente(pendente_id: int, body: ConfirmarCreate, db: 
                 "diasVerif": local.dias_verif,
                 "telefone": local.telefone,
                 "secretaria": local.secretaria,
+                "bairro": local.bairro,
+                "cidade": local.cidade,
                 "adicionadoEm": "agora",
             },
         })

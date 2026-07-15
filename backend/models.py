@@ -35,6 +35,8 @@ class Local(Base):
     dias_verif = Column(Integer, default=0)
     telefone   = Column(String, nullable=True)
     secretaria = Column(String, nullable=True)
+    bairro     = Column(String, nullable=True)
+    cidade     = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     medico = relationship("Medico", back_populates="locais")
@@ -50,6 +52,8 @@ class LocalPendente(Base):
     horario      = Column(String, nullable=False)
     telefone     = Column(String, nullable=True)
     secretaria   = Column(String, nullable=True)
+    bairro       = Column(String, nullable=True)
+    cidade       = Column(String, nullable=True)
     proposto_por = Column(String, nullable=False)
     confirmados  = Column(String, default="[]")  # JSON list de apelidos
     threshold    = Column(Integer, default=3)

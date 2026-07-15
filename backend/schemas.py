@@ -19,6 +19,8 @@ class LocalCreate(BaseModel):
     horario: str
     telefone: str | None = None
     secretaria: str | None = None
+    bairro: str | None = None
+    cidade: str | None = None
     usuario_apelido: str = ""
 
 
