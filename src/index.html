@@ -170,6 +170,11 @@ function MedicoCard({ medico, onReportar, destacado, apelido, onConfirmarLocal }
                       </span>
                     )}
                   </div>
+                  {(local.bairro || local.cidade) && (
+                    <p className="text-[11px] text-gray-400 leading-snug mt-0.5">
+                      {[local.bairro, local.cidade].filter(Boolean).join(' · ')}
+                    </p>
+                  )}
                   <p className="text-xs font-semibold text-emerald-700 mt-0.5">{local.dias} · {local.horario}</p>
                   <div className="flex items-center gap-2 mt-1 flex-wrap">
                     {local.diasVerif > 60 ? (
@@ -220,6 +225,11 @@ function MedicoCard({ medico, onReportar, destacado, apelido, onConfirmarLocal }
                     <span className="text-[10px] font-bold text-amber-600 uppercase tracking-wide">Aguardando confirmação</span>
                   </div>
                   <p className="text-xs text-gray-700 leading-snug mb-0.5">{lp.endereco}</p>
+                  {(lp.bairro || lp.cidade) && (
+                    <p className="text-[11px] text-gray-400 leading-snug mb-0.5">
+                      {[lp.bairro, lp.cidade].filter(Boolean).join(' · ')}
+                    </p>
+                  )}
                   <p className="text-xs font-semibold text-emerald-700">{lp.dias} · {lp.horario}</p>
                   {(lp.telefone || lp.secretaria) && (
                     <div className="flex items-center gap-3 mt-1 flex-wrap">
@@ -440,11 +450,11 @@ function PainelReporte({ medico, onFechar, onConfirmar, onAdicionarLocal, opcoes
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
       >
-        <div className="bg-white rounded-t-3xl shadow-2xl overflow-hidden">
-          <div className="flex justify-center pt-3">
+        <div className="bg-white rounded-t-3xl shadow-2xl flex flex-col" style={{ maxHeight: '90vh' }}>
+          <div className="flex justify-center pt-3 shrink-0">
             <div className="w-8 h-1 rounded-full bg-gray-200" />
           </div>
-          <div className="px-5 pt-4 pb-10">
+          <div className="px-5 pt-4 pb-10 overflow-y-auto">
             {passo === 'opcoes' ? (
               <>
                 <div className="mb-5">
@@ -1286,7 +1296,10 @@ function App() {
     [...new Set(medicos.map(m => m.especialidade))].sort(), [medicos]);
 
   const opcoesCidades = useMemo(() =>
-    [...new Set(medicos.flatMap(m => m.locais.map(l => l.cidade).filter(Boolean)))].sort(), [medicos]);
+    [...new Set(medicos.flatMap(m => [
+      ...m.locais.map(l => l.cidade),
+      ...(m.locaisPendentes || []).map(l => l.cidade),
+    ].filter(Boolean)))].sort(), [medicos]);
 
   const opcoesBairros = useMemo(() =>
     [...new Set(medicos.flatMap(m => m.locais.map(l => l.bairro).filter(Boolean)))].sort(), [medicos]);
@@ -1305,7 +1318,9 @@ function App() {
         (filtroStatus === 'disponiveis' && m.status === 'disponivel') ||
         (filtroStatus === 'alertas'     && m.status !== 'disponivel');
       const matchEsp = filtroEspecialidades.length === 0 || filtroEspecialidades.includes(m.especialidade);
-      const matchCid = filtroCidades.length === 0 || m.locais.some(l => filtroCidades.includes(l.cidade));
+      const matchCid = filtroCidades.length === 0 ||
+        m.locais.some(l => filtroCidades.includes(l.cidade)) ||
+        (m.locaisPendentes || []).some(l => filtroCidades.includes(l.cidade));
       const matchDia = filtroDias.length === 0 || m.locais.some(l =>
         filtroDias.some(d => (l.dias || '').includes(d))
       );
@@ -1362,7 +1377,7 @@ function App() {
         <div className="sticky z-20 border-b border-gray-200 shadow-sm" style={{ top: 108, background: '#F9FAFB' }}>
           {/* Linha 1: chips de status + botão Filtros */}
           <div className="max-w-lg mx-auto px-4 py-2.5 flex gap-2 overflow-x-auto items-center">
-            {FILTROS.map(f => {
+            {FILTROS.slice(0, 1).map(f => {
               const ativo = filtroStatus === f.id;
               return (
                 <button key={f.id} onClick={() => setFiltroStatus(f.id)}
@@ -1384,6 +1399,18 @@ function App() {
                 </span>
               )}
             </button>
+            {FILTROS.slice(1).map(f => {
+              const ativo = filtroStatus === f.id;
+              return (
+                <button key={f.id} onClick={() => setFiltroStatus(f.id)}
+                  className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-bold whitespace-nowrap shrink-0 transition-all duration-150 border-2 ${ativo ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm' : 'bg-white text-gray-500 border-gray-200 hover:border-emerald-300'}`}>
+                  {f.label}
+                  <span className={`text-xs font-black px-1.5 py-0.5 rounded-full leading-none ${ativo ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-400'}`}>
+                    {contadores[f.id]}
+                  </span>
+                </button>
+              );
+            })}
           </div>
 
           {/* Linha 2: painel expansível */}
