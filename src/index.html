@@ -489,27 +489,23 @@ function PainelReporte({ medico, onFechar, onConfirmar, onAdicionarLocal, opcoes
 
                 <div className="space-y-4">
 
-                  {/* CEP (opcional) */}
-                  <div>
-                    <label className="flex items-center gap-1.5 text-xs font-bold text-gray-500 mb-2">
-                      <i className="mdi mdi-magnify text-gray-400 text-sm" aria-hidden="true" /> CEP
-                      <span className="text-gray-400 font-normal">(opcional — preenche o endereço automaticamente)</span>
-                    </label>
-                    <div className="flex gap-2 items-center">
-                      <input type="text" placeholder="00000-000" inputMode="numeric"
-                        value={cep} onChange={e => handleCep(e.target.value)}
-                        className="w-36 border-2 border-gray-200 focus:border-blue-400 rounded-xl px-3 py-2.5 text-sm outline-none transition-colors"
-                      />
-                      {cepCarregando && <i className="mdi mdi-loading mdi-spin text-gray-400 text-lg" aria-hidden="true" />}
-                      {cepErro && <span className="text-xs text-red-500">{cepErro}</span>}
-                    </div>
-                  </div>
-
                   {/* Endereço estruturado */}
                   <div>
                     <label className="flex items-center gap-1.5 text-xs font-bold text-gray-500 mb-2">
                       <i className="mdi mdi-map-marker text-gray-400 text-sm" aria-hidden="true" /> Endereço *
                     </label>
+                    {/* CEP opcional dentro da seção */}
+                    <div className="flex gap-2 items-center mb-2">
+                      <input type="text" placeholder="CEP (opcional)" inputMode="numeric"
+                        value={cep} onChange={e => handleCep(e.target.value)}
+                        className="w-40 border-2 border-gray-200 focus:border-blue-400 rounded-xl px-3 py-2.5 text-sm outline-none transition-colors"
+                      />
+                      {cepCarregando && <i className="mdi mdi-loading mdi-spin text-gray-400 text-lg" aria-hidden="true" />}
+                      {!cepCarregando && !cepErro && cep.replace(/\D/g,'').length < 8 && (
+                        <span className="text-[11px] text-gray-400">preenche o endereço automaticamente</span>
+                      )}
+                      {cepErro && <span className="text-xs text-red-500">{cepErro}</span>}
+                    </div>
                     <div className="flex gap-2 mb-2">
                       <select value={tipoLog} onChange={e => setTipoLog(e.target.value)}
                         className="border-2 border-gray-200 focus:border-blue-400 rounded-xl px-3 py-2.5 text-sm outline-none transition-colors bg-white shrink-0">
@@ -968,6 +964,44 @@ function Carregando() {
   );
 }
 
+function MultiSelect({ label, options, selected, onChange }) {
+  const [open, setOpen] = React.useState(false);
+  const ref = React.useRef(null);
+
+  React.useEffect(() => {
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const toggle = (v) => onChange(selected.includes(v) ? selected.filter(x => x !== v) : [...selected, v]);
+  const labelText = selected.length === 0 ? label : `${label}: ${selected.length} selecionada${selected.length > 1 ? 's' : ''}`;
+
+  return (
+    <div ref={ref} className="relative">
+      <button type="button" onClick={() => setOpen(v => !v)}
+        className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl border-2 text-sm font-semibold transition-all ${selected.length > 0 ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-gray-200 bg-white text-gray-500 hover:border-emerald-300'}`}>
+        <span className="truncate">{labelText}</span>
+        <i className={`mdi mdi-chevron-${open ? 'up' : 'down'} text-lg shrink-0`} aria-hidden="true" />
+      </button>
+      {open && (
+        <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-52 overflow-y-auto">
+          {options.map(opt => {
+            const sel = selected.includes(opt);
+            return (
+              <button key={opt} type="button" onClick={() => toggle(opt)}
+                className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-left hover:bg-gray-50 transition-colors ${sel ? 'font-bold text-emerald-700' : 'text-gray-700'}`}>
+                <i className={`mdi ${sel ? 'mdi-checkbox-marked text-emerald-500' : 'mdi-checkbox-blank-outline text-gray-300'} text-lg shrink-0`} aria-hidden="true" />
+                {opt}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ─────────────────────────────────────────────
    APP PRINCIPAL
 ───────────────────────────────────────────── */
@@ -1340,55 +1374,25 @@ function App() {
                 </button>
               );
             })}
-            <div className="ml-auto shrink-0">
-              <button onClick={() => setShowFiltros(v => !v)}
-                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-sm font-bold whitespace-nowrap transition-all duration-150 border-2 ${showFiltros || totalFiltrosAtivos > 0 ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm' : 'bg-white text-gray-500 border-gray-200 hover:border-emerald-300'}`}>
-                <i className="mdi mdi-tune-variant text-base" aria-hidden="true" />
-                Filtros
-                {totalFiltrosAtivos > 0 && (
-                  <span className="bg-white/20 text-white text-xs font-black px-1.5 py-0.5 rounded-full leading-none">
-                    {totalFiltrosAtivos}
-                  </span>
-                )}
-              </button>
-            </div>
+            <button onClick={() => setShowFiltros(v => !v)}
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-sm font-bold whitespace-nowrap shrink-0 transition-all duration-150 border-2 ${showFiltros || totalFiltrosAtivos > 0 ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm' : 'bg-white text-gray-500 border-gray-200 hover:border-emerald-300'}`}>
+              <i className="mdi mdi-tune-variant text-base" aria-hidden="true" />
+              Filtros
+              {totalFiltrosAtivos > 0 && (
+                <span className="bg-white/20 text-white text-xs font-black px-1.5 py-0.5 rounded-full leading-none">
+                  {totalFiltrosAtivos}
+                </span>
+              )}
+            </button>
           </div>
 
           {/* Linha 2: painel expansível */}
           {showFiltros && (
             <div className="max-w-lg mx-auto px-4 pb-3 border-t border-gray-100">
-              {opcoesEspecialidades.length > 0 && (
-                <div className="mt-3">
-                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Especialidade</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {opcoesEspecialidades.map(e => {
-                      const ativo = filtroEspecialidades.includes(e);
-                      return (
-                        <button key={e} onClick={() => toggleArr(filtroEspecialidades, setFiltroEspecialidades, e)}
-                          className={`px-3 py-1 rounded-full text-xs font-bold border transition-all duration-150 ${ativo ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-gray-500 border-gray-200 hover:border-emerald-300'}`}>
-                          {e}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-              {opcoesCidades.length > 0 && (
-                <div className="mt-3">
-                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Cidade</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {opcoesCidades.map(c => {
-                      const ativo = filtroCidades.includes(c);
-                      return (
-                        <button key={c} onClick={() => toggleArr(filtroCidades, setFiltroCidades, c)}
-                          className={`px-3 py-1 rounded-full text-xs font-bold border transition-all duration-150 ${ativo ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-gray-500 border-gray-200 hover:border-emerald-300'}`}>
-                          {c}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
+              <div className="grid grid-cols-2 gap-2 mt-3">
+                <MultiSelect label="Especialidade" options={opcoesEspecialidades} selected={filtroEspecialidades} onChange={setFiltroEspecialidades} />
+                <MultiSelect label="Cidade" options={opcoesCidades} selected={filtroCidades} onChange={setFiltroCidades} />
+              </div>
               <div className="mt-3">
                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Dia da semana</p>
                 <div className="flex flex-wrap gap-1.5">
