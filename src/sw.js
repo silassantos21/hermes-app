@@ -1,4 +1,4 @@
-const CACHE = 'hermes-v1';
+const CACHE = 'hermes-v2';
 const SHELL = ['/', '/manifest.json', '/hermes-logo.svg', '/hermes-logo-corpo.svg', '/hermes-logo-corpo-branco.svg'];
 
 self.addEventListener('install', e => {
