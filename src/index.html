@@ -1121,71 +1121,78 @@ function AbaAdmin() {
 
   /* ── Tela de preview ── */
   return (
-    <main className="max-w-lg mx-auto px-4 py-6 pb-28">
-      <div className="flex items-center gap-3 mb-5">
-        <button onClick={reiniciar} className="w-8 h-8 rounded-xl bg-gray-100 flex items-center justify-center">
-          <i className="mdi mdi-arrow-left text-gray-600" />
-        </button>
-        <div className="flex-1">
-          <p className="font-black text-gray-900">{arquivo?.name}</p>
-          <p className="text-xs text-gray-400">{preview.total} médico(s) encontrado(s)</p>
-        </div>
-      </div>
-
-      {/* Resumo */}
-      <div className="grid grid-cols-2 gap-3 mb-4">
-        <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 text-center">
-          <p className="text-2xl font-black text-emerald-600">{preview.novos}</p>
-          <p className="text-xs text-emerald-700 font-semibold mt-0.5">Novos</p>
-        </div>
-        <div className="bg-gray-50 border border-gray-200 rounded-2xl p-4 text-center">
-          <p className="text-2xl font-black text-gray-400">{preview.duplicados}</p>
-          <p className="text-xs text-gray-500 font-semibold mt-0.5">Já cadastrados</p>
-        </div>
-      </div>
-
-      {/* Filtro da lista */}
-      <div className="flex gap-2 mb-3">
-        {[['todos','Todos'], ['novo','Novos'], ['duplicado','Já cadastrados']].map(([v, l]) => (
-          <button key={v} onClick={() => setFiltroAdmin(v)}
-            className={`px-3 py-1.5 rounded-full text-xs font-bold border-2 transition-all ${filtroAdmin === v ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-gray-500 border-gray-200'}`}>
-            {l}
+    <>
+      <main className="max-w-lg mx-auto px-4 py-6 pb-36">
+        <div className="flex items-center gap-3 mb-5">
+          <button onClick={reiniciar} className="w-8 h-8 rounded-xl bg-gray-100 flex items-center justify-center">
+            <i className="mdi mdi-arrow-left text-gray-600" />
           </button>
-        ))}
-      </div>
+          <div className="flex-1">
+            <p className="font-black text-gray-900">{arquivo?.name}</p>
+            <p className="text-xs text-gray-400">{preview.total} médico(s) encontrado(s)</p>
+          </div>
+        </div>
 
-      {/* Lista */}
-      <div className="space-y-2 mb-6">
-        {medicosFiltrados.map((m, i) => (
-          <div key={i} className="bg-white border border-gray-100 rounded-xl px-4 py-3 flex items-center gap-3 shadow-sm">
-            <div className="w-9 h-9 rounded-xl bg-gray-100 flex items-center justify-center shrink-0">
-              <span className="text-xs font-black text-gray-500">
-                {m.nome.split(' ').filter(p => !['Dr.','Dra.','Dr','Dra'].includes(p)).slice(0,2).map(p=>p[0]).join('')}
+        {/* Resumo */}
+        <div className="grid grid-cols-2 gap-3 mb-4">
+          <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 text-center">
+            <p className="text-2xl font-black text-emerald-600">{preview.novos}</p>
+            <p className="text-xs text-emerald-700 font-semibold mt-0.5">Novos</p>
+          </div>
+          <div className="bg-gray-50 border border-gray-200 rounded-2xl p-4 text-center">
+            <p className="text-2xl font-black text-gray-400">{preview.duplicados}</p>
+            <p className="text-xs text-gray-500 font-semibold mt-0.5">Já cadastrados</p>
+          </div>
+        </div>
+
+        {/* Filtro da lista */}
+        <div className="flex gap-2 mb-3">
+          {[['todos','Todos'], ['novo','Novos'], ['duplicado','Já cadastrados']].map(([v, l]) => (
+            <button key={v} onClick={() => setFiltroAdmin(v)}
+              className={`px-3 py-1.5 rounded-full text-xs font-bold border-2 transition-all ${filtroAdmin === v ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-gray-500 border-gray-200'}`}>
+              {l}
+            </button>
+          ))}
+        </div>
+
+        {/* Lista */}
+        <div className="space-y-2">
+          {medicosFiltrados.map((m, i) => (
+            <div key={i} className="bg-white border border-gray-100 rounded-xl px-4 py-3 flex items-center gap-3 shadow-sm">
+              <div className="w-9 h-9 rounded-xl bg-gray-100 flex items-center justify-center shrink-0">
+                <span className="text-xs font-black text-gray-500">
+                  {m.nome.split(' ').filter(p => !['Dr.','Dra.','Dr','Dra'].includes(p)).slice(0,2).map(p=>p[0]).join('')}
+                </span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-gray-800 truncate">{m.nome}</p>
+                <p className="text-xs text-gray-400 truncate">{m.especialidade}{m.cidade ? ` · ${m.cidade}` : ''}</p>
+              </div>
+              <span className={`text-[10px] font-bold px-2 py-1 rounded-full shrink-0 ${m.status === 'novo' ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-400'}`}>
+                {m.status === 'novo' ? 'Novo' : 'Já existe'}
               </span>
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-bold text-gray-800 truncate">{m.nome}</p>
-              <p className="text-xs text-gray-400 truncate">{m.especialidade}{m.cidade ? ` · ${m.cidade}` : ''}</p>
-            </div>
-            <span className={`text-[10px] font-bold px-2 py-1 rounded-full shrink-0 ${m.status === 'novo' ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-400'}`}>
-              {m.status === 'novo' ? 'Novo' : 'Já existe'}
-            </span>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      </main>
 
-      {erro && <p className="mb-4 text-sm text-red-500 text-center">{erro}</p>}
-
+      {/* Botão fixo acima da nav */}
       {preview.novos > 0 && (
-        <button onClick={handleImportar} disabled={carregando}
-          className="w-full py-4 rounded-2xl bg-emerald-600 text-white font-black text-sm flex items-center justify-center gap-2 disabled:opacity-60">
-          {carregando
-            ? <><i className="mdi mdi-loading mdi-spin text-lg" /> Importando…</>
-            : <><i className="mdi mdi-cloud-upload-outline text-lg" /> Importar {preview.novos} médico{preview.novos !== 1 ? 's' : ''} novo{preview.novos !== 1 ? 's' : ''}</>
-          }
-        </button>
+        <div className="fixed bottom-16 inset-x-0 z-20 max-w-lg mx-auto pointer-events-none">
+          <div className="h-10 bg-gradient-to-t from-[#F9FAFB] to-transparent" />
+          <div className="bg-[#F9FAFB] px-4 pb-3 pointer-events-auto">
+            {erro && <p className="mb-2 text-xs text-red-500 text-center">{erro}</p>}
+            <button onClick={handleImportar} disabled={carregando}
+              className="w-full py-4 rounded-2xl bg-emerald-600 text-white font-black text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-200 disabled:opacity-60 transition-opacity">
+              {carregando
+                ? <><i className="mdi mdi-loading mdi-spin text-lg" /> Importando…</>
+                : <><i className="mdi mdi-cloud-upload-outline text-lg" /> Importar {preview.novos} médico{preview.novos !== 1 ? 's' : ''} novo{preview.novos !== 1 ? 's' : ''}</>
+              }
+            </button>
+          </div>
+        </div>
       )}
-    </main>
+    </>
   );
 }
 
