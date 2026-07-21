@@ -5,11 +5,12 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import socketio
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 
+import importador
 import models
 import schemas
 from database import SessionLocal, engine, get_db
@@ -449,6 +450,68 @@ def criar_ou_buscar_usuario(body: schemas.UsuarioCreate, db: Session = Depends(g
         db.commit()
         db.refresh(usuario)
     return {"id": usuario.id, "apelido": usuario.apelido, "xp_total": usuario.xp_total}
+
+
+# ── Admin: importação de médicos ──────────────────────────
+@fastapi_app.post("/api/admin/preview-importacao")
+async def preview_importacao(arquivo: UploadFile = File(...), db: Session = Depends(get_db)):
+    conteudo = await arquivo.read()
+    try:
+        linhas = importador.ler_xlsx_bytes(conteudo)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Erro ao ler arquivo: {e}")
+
+    crms_existentes = {m.crm for m in db.query(models.Medico.crm).all()}
+
+    medicos = []
+    for row in linhas:
+        data = importador.parsear_medico(row)
+        if not data:
+            continue
+        data["status"] = "duplicado" if data["crm"] in crms_existentes else "novo"
+        medicos.append(data)
+
+    novos      = sum(1 for m in medicos if m["status"] == "novo")
+    duplicados = sum(1 for m in medicos if m["status"] == "duplicado")
+    return {"total": len(medicos), "novos": novos, "duplicados": duplicados, "medicos": medicos}
+
+
+@fastapi_app.post("/api/admin/importar")
+async def importar_medicos(arquivo: UploadFile = File(...), db: Session = Depends(get_db)):
+    conteudo = await arquivo.read()
+    try:
+        linhas = importador.ler_xlsx_bytes(conteudo)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Erro ao ler arquivo: {e}")
+
+    crms_existentes = {m.crm for m in db.query(models.Medico.crm).all()}
+    inseridos = ignorados = erros = 0
+
+    for row in linhas:
+        data = importador.parsear_medico(row)
+        if not data:
+            erros += 1
+            continue
+        if data["crm"] in crms_existentes:
+            ignorados += 1
+            continue
+        medico = models.Medico(nome=data["nome"], crm=data["crm"], especialidade=data["especialidade"])
+        db.add(medico)
+        db.flush()
+        db.add(models.Local(
+            medico_id=medico.id,
+            endereco=data["endereco"],
+            bairro=data["bairro"],
+            cidade=data["cidade"],
+            dias="A confirmar",
+            horario="A confirmar",
+            verificado=False,
+        ))
+        crms_existentes.add(data["crm"])
+        inseridos += 1
+
+    db.commit()
+    return {"inseridos": inseridos, "ignorados": ignorados, "erros": erros}
 
 
 # ── Arquivos estáticos — deve ficar por último ────────────

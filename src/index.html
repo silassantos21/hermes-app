@@ -96,10 +96,11 @@ const FEED_ICON = {
 };
 
 const ABAS = [
-  { id: 'medicos',  label: 'Médicos',  icon: 'mdi-stethoscope'     },
-  { id: 'feed',     label: 'Feed',     icon: 'mdi-broadcast'        },
-  { id: 'ranking',  label: 'Ranking',  icon: 'mdi-trophy-outline'   },
-  { id: 'perfil',   label: 'Perfil',   icon: 'mdi-account-outline'  },
+  { id: 'medicos',  label: 'Médicos',  icon: 'mdi-stethoscope'        },
+  { id: 'feed',     label: 'Feed',     icon: 'mdi-broadcast'          },
+  { id: 'ranking',  label: 'Ranking',  icon: 'mdi-trophy-outline'     },
+  { id: 'perfil',   label: 'Perfil',   icon: 'mdi-account-outline'    },
+  { id: 'admin',    label: 'Admin',    icon: 'mdi-cloud-upload-outline'},
 ];
 
 const FILTROS = [
@@ -1013,6 +1014,182 @@ function MultiSelect({ label, options, selected, onChange }) {
 }
 
 /* ─────────────────────────────────────────────
+   ABA ADMIN — IMPORTAÇÃO DE MÉDICOS
+───────────────────────────────────────────── */
+function AbaAdmin() {
+  const [etapa, setEtapa]       = useState('upload');   // 'upload' | 'preview' | 'sucesso'
+  const [preview, setPreview]   = useState(null);
+  const [arquivo, setArquivo]   = useState(null);
+  const [carregando, setCarregando] = useState(false);
+  const [erro, setErro]         = useState('');
+  const [resultado, setResultado] = useState(null);
+  const [filtroAdmin, setFiltroAdmin] = useState('todos'); // 'todos' | 'novos' | 'duplicados'
+
+  const handleArquivo = async (file) => {
+    if (!file) return;
+    setArquivo(file);
+    setErro('');
+    setCarregando(true);
+    try {
+      const form = new FormData();
+      form.append('arquivo', file);
+      const res = await fetch('/api/admin/preview-importacao', { method: 'POST', body: form });
+      if (!res.ok) throw new Error((await res.json()).detail || 'Erro no servidor');
+      setPreview(await res.json());
+      setEtapa('preview');
+    } catch (e) {
+      setErro(e.message || 'Erro ao processar arquivo');
+    } finally {
+      setCarregando(false);
+    }
+  };
+
+  const handleImportar = async () => {
+    setCarregando(true);
+    setErro('');
+    try {
+      const form = new FormData();
+      form.append('arquivo', arquivo);
+      const res = await fetch('/api/admin/importar', { method: 'POST', body: form });
+      if (!res.ok) throw new Error((await res.json()).detail || 'Erro no servidor');
+      setResultado(await res.json());
+      setEtapa('sucesso');
+    } catch (e) {
+      setErro(e.message || 'Erro ao importar');
+    } finally {
+      setCarregando(false);
+    }
+  };
+
+  const reiniciar = () => {
+    setEtapa('upload'); setPreview(null); setArquivo(null);
+    setErro(''); setResultado(null); setFiltroAdmin('todos');
+  };
+
+  const medicosFiltrados = preview ? preview.medicos.filter(m =>
+    filtroAdmin === 'todos' ? true : m.status === filtroAdmin
+  ) : [];
+
+  /* ── Tela de upload ── */
+  if (etapa === 'upload') return (
+    <main className="max-w-lg mx-auto px-4 py-6 pb-28">
+      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Administração</p>
+      <p className="text-xl font-black text-gray-900 mb-6">Importar médicos</p>
+
+      <label className={`flex flex-col items-center justify-center gap-3 border-2 border-dashed rounded-2xl p-10 cursor-pointer transition-colors ${carregando ? 'border-emerald-300 bg-emerald-50' : 'border-gray-200 hover:border-emerald-300 hover:bg-emerald-50/50'}`}>
+        {carregando
+          ? <i className="mdi mdi-loading mdi-spin text-4xl text-emerald-400" />
+          : <i className="mdi mdi-cloud-upload-outline text-4xl text-gray-300" />
+        }
+        <div className="text-center">
+          <p className="font-bold text-gray-600 text-sm">{carregando ? 'Processando…' : 'Selecione o arquivo XLSX'}</p>
+          <p className="text-xs text-gray-400 mt-0.5">Exportação "Meus Alvos" do Veeva CRM</p>
+        </div>
+        <input type="file" accept=".xlsx,.xls,.csv" className="hidden"
+          onChange={e => handleArquivo(e.target.files[0])} disabled={carregando} />
+      </label>
+
+      {erro && <p className="mt-4 text-sm text-red-500 text-center">{erro}</p>}
+    </main>
+  );
+
+  /* ── Tela de sucesso ── */
+  if (etapa === 'sucesso') return (
+    <main className="max-w-lg mx-auto px-4 py-6 pb-28 flex flex-col items-center gap-4">
+      <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center mt-8">
+        <i className="mdi mdi-check-circle text-4xl text-emerald-500" />
+      </div>
+      <p className="text-xl font-black text-gray-900">Importação concluída</p>
+      <div className="w-full grid grid-cols-3 gap-3 mt-2">
+        {[
+          { label: 'Inseridos',  valor: resultado.inseridos, cor: 'text-emerald-600' },
+          { label: 'Ignorados',  valor: resultado.ignorados, cor: 'text-gray-400'    },
+          { label: 'Erros',      valor: resultado.erros,     cor: 'text-red-500'     },
+        ].map(s => (
+          <div key={s.label} className="bg-white rounded-2xl border border-gray-100 p-4 text-center shadow-sm">
+            <p className={`text-2xl font-black ${s.cor}`}>{s.valor}</p>
+            <p className="text-xs text-gray-400 mt-0.5">{s.label}</p>
+          </div>
+        ))}
+      </div>
+      <button onClick={reiniciar}
+        className="mt-4 px-6 py-3 rounded-2xl bg-emerald-600 text-white font-bold text-sm">
+        Nova importação
+      </button>
+    </main>
+  );
+
+  /* ── Tela de preview ── */
+  return (
+    <main className="max-w-lg mx-auto px-4 py-6 pb-28">
+      <div className="flex items-center gap-3 mb-5">
+        <button onClick={reiniciar} className="w-8 h-8 rounded-xl bg-gray-100 flex items-center justify-center">
+          <i className="mdi mdi-arrow-left text-gray-600" />
+        </button>
+        <div className="flex-1">
+          <p className="font-black text-gray-900">{arquivo?.name}</p>
+          <p className="text-xs text-gray-400">{preview.total} médico(s) encontrado(s)</p>
+        </div>
+      </div>
+
+      {/* Resumo */}
+      <div className="grid grid-cols-2 gap-3 mb-4">
+        <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 text-center">
+          <p className="text-2xl font-black text-emerald-600">{preview.novos}</p>
+          <p className="text-xs text-emerald-700 font-semibold mt-0.5">Novos</p>
+        </div>
+        <div className="bg-gray-50 border border-gray-200 rounded-2xl p-4 text-center">
+          <p className="text-2xl font-black text-gray-400">{preview.duplicados}</p>
+          <p className="text-xs text-gray-500 font-semibold mt-0.5">Já cadastrados</p>
+        </div>
+      </div>
+
+      {/* Filtro da lista */}
+      <div className="flex gap-2 mb-3">
+        {[['todos','Todos'], ['novo','Novos'], ['duplicado','Já cadastrados']].map(([v, l]) => (
+          <button key={v} onClick={() => setFiltroAdmin(v)}
+            className={`px-3 py-1.5 rounded-full text-xs font-bold border-2 transition-all ${filtroAdmin === v ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-gray-500 border-gray-200'}`}>
+            {l}
+          </button>
+        ))}
+      </div>
+
+      {/* Lista */}
+      <div className="space-y-2 mb-6">
+        {medicosFiltrados.map((m, i) => (
+          <div key={i} className="bg-white border border-gray-100 rounded-xl px-4 py-3 flex items-center gap-3 shadow-sm">
+            <div className="w-9 h-9 rounded-xl bg-gray-100 flex items-center justify-center shrink-0">
+              <span className="text-xs font-black text-gray-500">
+                {m.nome.split(' ').filter(p => !['Dr.','Dra.','Dr','Dra'].includes(p)).slice(0,2).map(p=>p[0]).join('')}
+              </span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-bold text-gray-800 truncate">{m.nome}</p>
+              <p className="text-xs text-gray-400 truncate">{m.especialidade}{m.cidade ? ` · ${m.cidade}` : ''}</p>
+            </div>
+            <span className={`text-[10px] font-bold px-2 py-1 rounded-full shrink-0 ${m.status === 'novo' ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-400'}`}>
+              {m.status === 'novo' ? 'Novo' : 'Já existe'}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {erro && <p className="mb-4 text-sm text-red-500 text-center">{erro}</p>}
+
+      {preview.novos > 0 && (
+        <button onClick={handleImportar} disabled={carregando}
+          className="w-full py-4 rounded-2xl bg-emerald-600 text-white font-black text-sm flex items-center justify-center gap-2 disabled:opacity-60">
+          {carregando
+            ? <><i className="mdi mdi-loading mdi-spin text-lg" /> Importando…</>
+            : <><i className="mdi mdi-cloud-upload-outline text-lg" /> Importar {preview.novos} médico{preview.novos !== 1 ? 's' : ''} novo{preview.novos !== 1 ? 's' : ''}</>
+          }
+        </button>
+      )}
+    </main>
+  );
+}
+
+/* ─────────────────────────────────────────────
    APP PRINCIPAL
 ───────────────────────────────────────────── */
 function App() {
@@ -1472,6 +1649,7 @@ function App() {
       {aba === 'feed'    && <main className="max-w-lg mx-auto px-4 py-4 pb-28"><FeedComunidade feed={feed} onIrParaMedico={irParaMedico} /></main>}
       {aba === 'ranking' && <AbaRanking data={rankingData} loading={rankingLoading} apelido={apelido} />}
       {aba === 'perfil'  && <AbaPerfil data={perfilData} apelido={apelido} xp={xp} />}
+      {aba === 'admin'   && <AbaAdmin />}
 
       {/* ── BOTTOM NAV ── */}
       <nav className="fixed bottom-0 inset-x-0 z-30 bg-white border-t border-gray-100 shadow-lg">
