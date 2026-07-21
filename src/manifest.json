@@ -9,7 +9,7 @@
   "theme_color": "#065F46",
   "icons": [
     {
-      "src": "/hermes-logo-corpo-branco.svg",
+      "src": "/hermes-logo-corpo.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any"
