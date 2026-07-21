@@ -123,8 +123,8 @@ const HORARIOS_PRESET = [
    HELPERS
 ───────────────────────────────────────────── */
 
-function nomeExibicao(nome) {
-  if (!nome || nome.length <= 20) return nome;
+function nomeExibicao(nome, max = 20) {
+  if (!nome || nome.length <= max) return nome;
   const m = nome.match(/^(Dra?\.?\s+)/i);
   if (m) {
     const prefixo = /dra/i.test(m[0]) ? 'Dra.' : 'Dr.';
@@ -869,7 +869,7 @@ function FeedCompacto({ feed, onVerFeed, onIrParaMedico }) {
                   onClick={() => onIrParaMedico?.(item.medico)}
                   className="text-emerald-700 font-semibold underline decoration-emerald-200 underline-offset-2 active:opacity-60"
                 >
-                  {item.medico}
+                  {nomeExibicao(item.medico, 14)}
                 </button>
               </p>
               <p className="text-[10px] text-gray-400 mt-0.5 truncate">{item.acao}</p>
@@ -912,7 +912,7 @@ function FeedComunidade({ feed, onIrParaMedico }) {
                 onClick={() => onIrParaMedico?.(item.medico)}
                 className="font-semibold text-emerald-700 underline decoration-emerald-200 underline-offset-2 active:opacity-60"
               >
-                {item.medico}
+                {nomeExibicao(item.medico)}
               </button>
             </p>
             <p className="text-xs text-gray-400 mt-0.5">"{item.acao}" · {item.tempo}</p>
