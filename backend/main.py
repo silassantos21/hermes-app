@@ -65,7 +65,7 @@ async def _expirar_status_loop():
             limite = datetime.utcnow() - timedelta(hours=12)
             medicos = (
                 db.query(models.Medico)
-                .filter(models.Medico.updated_at < limite, models.Medico.status != "indisponivel")
+                .filter(models.Medico.updated_at < limite, models.Medico.status.notin_(["indisponivel", "nao_trabalha"]))
                 .all()
             )
             for m in medicos:
@@ -190,7 +190,7 @@ async def criar_reporte(body: schemas.ReporteCreate, db: Session = Depends(get_d
     if not medico:
         raise HTTPException(status_code=404, detail="Médico não encontrado")
 
-    if body.opcao_id not in ("endereco", "nao_trabalha"):
+    if body.opcao_id != "endereco":
         medico.status = body.opcao_id
         medico.ultimo_reporte = "agora"
         medico.reportado_por = body.usuario_apelido
@@ -393,7 +393,7 @@ async def desfazer_reporte(reporte_id: int, apelido: str, db: Session = Depends(
     if usuario:
         usuario.xp_total = max(0, usuario.xp_total - reporte.xp)
 
-    emite_status = reporte.opcao_id not in ("endereco", "nao_trabalha")
+    emite_status = reporte.opcao_id != "endereco"
     medico_id_emit = reporte.medico_id
 
     if emite_status and medico:
