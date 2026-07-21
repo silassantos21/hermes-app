@@ -1016,7 +1016,7 @@ function MultiSelect({ label, options, selected, onChange }) {
 /* ─────────────────────────────────────────────
    ABA ADMIN — IMPORTAÇÃO DE MÉDICOS
 ───────────────────────────────────────────── */
-function AbaAdmin() {
+function AbaAdmin({ onImportado }) {
   const [etapa, setEtapa]       = useState('upload');   // 'upload' | 'preview' | 'sucesso'
   const [preview, setPreview]   = useState(null);
   const [arquivo, setArquivo]   = useState(null);
@@ -1054,6 +1054,7 @@ function AbaAdmin() {
       if (!res.ok) throw new Error((await res.json()).detail || 'Erro no servidor');
       setResultado(await res.json());
       setEtapa('sucesso');
+      onImportado();
     } catch (e) {
       setErro(e.message || 'Erro ao importar');
     } finally {
@@ -1246,6 +1247,15 @@ function App() {
       if (undoTimer.current) clearTimeout(undoTimer.current);
     };
   }, []);
+
+  const recarregarMedicos = async () => {
+    try {
+      const data = await fetch('/api/medicos').then(r => r.json());
+      setMedicos(data);
+    } catch (e) {
+      console.error('[Hermes] Erro ao recarregar médicos:', e);
+    }
+  };
 
   const inicializar = async (ap) => {
     setCarregando(true);
@@ -1656,7 +1666,7 @@ function App() {
       {aba === 'feed'    && <main className="max-w-lg mx-auto px-4 py-4 pb-28"><FeedComunidade feed={feed} onIrParaMedico={irParaMedico} /></main>}
       {aba === 'ranking' && <AbaRanking data={rankingData} loading={rankingLoading} apelido={apelido} />}
       {aba === 'perfil'  && <AbaPerfil data={perfilData} apelido={apelido} xp={xp} />}
-      {aba === 'admin'   && <AbaAdmin />}
+      {aba === 'admin'   && <AbaAdmin onImportado={recarregarMedicos} />}
 
       {/* ── BOTTOM NAV ── */}
       <nav className="fixed bottom-0 inset-x-0 z-30 bg-white border-t border-gray-100 shadow-lg">
