@@ -21,6 +21,27 @@ from seed import seed_database
 models.Base.metadata.create_all(bind=engine)
 
 
+def _migrar_colunas():
+    """Adiciona colunas que podem não existir em bancos criados antes da migração."""
+    from sqlalchemy import text
+    migracoes = [
+        "ALTER TABLE locais ADD COLUMN IF NOT EXISTS bairro VARCHAR",
+        "ALTER TABLE locais ADD COLUMN IF NOT EXISTS cidade VARCHAR",
+        "ALTER TABLE locais_pendentes ADD COLUMN IF NOT EXISTS bairro VARCHAR",
+        "ALTER TABLE locais_pendentes ADD COLUMN IF NOT EXISTS cidade VARCHAR",
+    ]
+    with engine.connect() as conn:
+        for sql in migracoes:
+            try:
+                conn.execute(text(sql))
+            except Exception:
+                pass
+        conn.commit()
+
+
+_migrar_colunas()
+
+
 def _init_db():
     db = SessionLocal()
     try:
