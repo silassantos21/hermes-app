@@ -123,6 +123,19 @@ const HORARIOS_PRESET = [
    HELPERS
 ───────────────────────────────────────────── */
 
+function nomeExibicao(nome) {
+  if (!nome || nome.length <= 20) return nome;
+  const m = nome.match(/^(Dra?\.?\s+)/i);
+  if (m) {
+    const prefixo = /dra/i.test(m[0]) ? 'Dra.' : 'Dr.';
+    const primeiro = nome.slice(m[0].length).trim().split(/\s+/)[0] || '';
+    return `${prefixo} ${primeiro}`;
+  }
+  const partes = nome.trim().split(/\s+/);
+  if (partes.length < 2) return nome;
+  return `${partes[0]} ${partes[partes.length - 1][0]}.`;
+}
+
 function tempoRelativo(isoStr) {
   if (!isoStr) return null;
   const diff = (Date.now() - new Date(isoStr + 'Z').getTime()) / 1000;
@@ -161,7 +174,7 @@ function MedicoCard({ medico, onReportar, destacado, apelido, onConfirmarLocal }
           <div className="flex-1 min-w-0">
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
-                <p className="font-bold text-gray-900 text-sm leading-tight truncate">{medico.nome}</p>
+                <p className="font-bold text-gray-900 text-sm leading-tight truncate" title={medico.nome}>{nomeExibicao(medico.nome)}</p>
                 <p className="text-emerald-600 font-semibold text-xs mt-0.5">{medico.especialidade}</p>
                 <p className="text-gray-400 text-xs">{medico.crm}</p>
               </div>
