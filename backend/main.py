@@ -118,6 +118,7 @@ def _medico_dict(m: models.Medico) -> dict:
         "ultimoReporte": m.ultimo_reporte,
         "reportadoPor": m.reportado_por,
         "totalReportes": m.total_reportes,
+        "updatedAt": m.updated_at.isoformat() if m.updated_at else None,
         "locais": [
             {
                 "id": l.id,
@@ -219,6 +220,7 @@ async def criar_reporte(body: schemas.ReporteCreate, db: Session = Depends(get_d
         "medicoId": medico.id,
         "status": medico.status,
         "reportadoPor": body.usuario_apelido,
+        "updatedAt": medico.updated_at.isoformat(),
     })
     await sio.emit("novo_reporte", _reporte_dict(reporte))
 
@@ -424,6 +426,7 @@ async def desfazer_reporte(reporte_id: int, apelido: str, db: Session = Depends(
             "medicoId": medico.id,
             "status": medico.status,
             "reportadoPor": medico.reportado_por,
+            "updatedAt": medico.updated_at.isoformat() if medico.updated_at else None,
         })
     await sio.emit("reporte_desfeito", {"reporteId": reporte_id_emit})
     return {"ok": True}
